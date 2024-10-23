@@ -1,4 +1,4 @@
-from PCA import PCA
+from pca import PCA
 from sklearn import datasets
 import matplotlib.pyplot as plt
 

@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn import datasets
-from NaiveBayes import NaiveBayes
+from naive_bayes import NaiveBayes
 from sklearn.model_selection import train_test_split
 
 # Loading the dataset

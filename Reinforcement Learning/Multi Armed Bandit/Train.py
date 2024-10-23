@@ -1,9 +1,9 @@
-import Utils
+import utils
 import numpy as np
-from UCB1 import UCB1
+from ucb1 import UCB1
 import matplotlib.pyplot as plt
-from Environment import Environment
-from ThompsonSampling import ThompsonSampling
+from environment import Environment
+from thompson_sampling import ThompsonSampling
 
 # Global variables and experiment parameters
 T = 1000
@@ -14,7 +14,7 @@ ucb1_rewards_per_experiment = []
 
 # Print status
 print("Starting Simulation...")
-Utils.printProgressBar(0, n_experiments)
+utils.printProgressBar(0, n_experiments)
 
 # Initializing the environment
 environment = Environment(n_arms=n_arms)
@@ -45,7 +45,7 @@ for e in range(n_experiments):
     ucb1_rewards_per_experiment.append(ucb1.collected_rewards)
 
     # Print status
-    Utils.printProgressBar(e+1, n_experiments)
+    utils.printProgressBar(e+1, n_experiments)
 
 
 # Plotting the results

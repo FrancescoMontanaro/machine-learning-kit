@@ -1,5 +1,5 @@
 import numpy as np
-from Node import Node
+from node import Node
 from collections import Counter
 
 class DecisionTree:

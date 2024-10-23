@@ -1,5 +1,5 @@
 import numpy as np
-from KNN import KNN
+from knn import KNN
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
 

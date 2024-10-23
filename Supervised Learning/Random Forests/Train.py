@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn import datasets
-from RandomForest import RandomForest
+from random_forest import RandomForest
 from sklearn.model_selection import train_test_split
 
 # Loading the dataset

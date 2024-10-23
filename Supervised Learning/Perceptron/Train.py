@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn import datasets
-from Perceptron import Perceptron
+from perceptron import Perceptron
 from sklearn.model_selection import train_test_split
 
 # Loading the dataset

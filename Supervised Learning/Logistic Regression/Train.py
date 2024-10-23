@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn import datasets
-from LogisticRegression import LogisticRegression
+from logistic_regression import LogisticRegression
 from sklearn.model_selection import train_test_split
 
 # Loading the dataset

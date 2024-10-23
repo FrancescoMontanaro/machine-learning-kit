@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn import datasets
 from matplotlib import pyplot as plt
-from LinearRegression import LinearRegression
+from linear_regression import LinearRegression
 from sklearn.model_selection import train_test_split
 
 # Loading the dataset

@@ -1,5 +1,5 @@
 import numpy as np
-from KMeans import KMeans
+from k_means import KMeans
 from sklearn.datasets import make_blobs
 
 
