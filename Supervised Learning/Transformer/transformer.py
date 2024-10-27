@@ -74,7 +74,7 @@ class Transformer(nn.Module):
     
     def __init__(self, vocab_size: int, n_embed: int, n_heads: int, block_size: int, n_transformer_blocks: int = 4, dropout: float = 0.1) -> None:
         """
-        Initialize the language model.
+        Initialize the Transformer.
         
         Parameters:
         - vocab_size (int): The size of the vocabulary.
@@ -103,7 +103,7 @@ class Transformer(nn.Module):
                 dropout = dropout
             ) for _ in range(n_transformer_blocks)
         ], nn.LayerNorm(n_embed))  # Add a normalization at the end of the encoder
-        self.lm_head = nn.Linear(n_embed, vocab_size) # Create the linear layer for the language model head
+        self.head = nn.Linear(n_embed, vocab_size) # Create the linear layer to get the logits
         
         ###############
         
@@ -118,7 +118,7 @@ class Transformer(nn.Module):
     
     def forward(self, input_tokens: torch.Tensor, targets: Optional[torch.Tensor] = None) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Forward pass of the language model.
+        Forward pass of the model.
         
         Parameters:
         - input_tokens (torch.Tensor): The input tokens.
@@ -144,7 +144,7 @@ class Transformer(nn.Module):
         embeddings = self.transformer_blocks(embeddings) # (B, T, n_embed)
         
         # Compute the logits
-        logits = self.lm_head(embeddings) # (B, T, vocab_size)
+        logits = self.head(embeddings) # (B, T, vocab_size)
         
         if targets is None:
             # If no targets are provided, return the logits and no loss
@@ -202,7 +202,7 @@ class Transformer(nn.Module):
     
     def train_model(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int, eval_iters: int = 200) -> None:
         """
-        Method to train the language model.
+        Method to train the model.
         
         Parameters:
         - data_loader (DataLoader): The data loader object to get the data from.
