@@ -27,7 +27,7 @@ We’ll follow **"I like cats"** step-by-step, with detailed matrix manipulation
 
 1. **Input Sentence**: "I like cats"
 2. **Token IDs**: Assign each word an ID (e.g., `{ "I": 1, "like": 2, "cats": 3 }`).
-3. **Embedding Dimension**: For simplicity, we set $d_{\text{model}} = 3$, with a vocabulary size $ V = 10 $.
+3. **Embedding Dimension**: For simplicity, we set $d_{\text{model}} = 3$, with a vocabulary size $V = 10$.
 
 Each transformation matrix will be explicitly calculated and explained.
 
@@ -35,45 +35,40 @@ Each transformation matrix will be explicitly calculated and explained.
 
 ### Token Embedding
 
-Tokens are converted to embeddings using an embedding matrix $ E $ with dimensions $ V \times d_{\text{model}} = 10 \times 3 $. Each word maps to a 3-dimensional vector.
+Tokens are converted to embeddings using an embedding matrix $E$ with dimensions $V \times d_{\text{model}} = 10 \times 3$. Each word maps to a 3-dimensional vector.
 
-- **Embedding Matrix $ E $** (simplified for explanation):
-  $
-  E = \begin{bmatrix}
+- **Embedding Matrix $E$** (simplified for explanation):
+  $E = \begin{bmatrix}
     0.1 & 0.2 & 0.3 \\ 
     0.4 & 0.5 & 0.6 \\ 
     0.7 & 0.8 & 0.9 \\ 
     \vdots & \vdots & \vdots 
-  \end{bmatrix}
-  $
+  \end{bmatrix}$
 
 - **Token Embeddings for "I," "like," "cats"** (example calculation):
-  - "I" (ID 1): $ E[1] = [0.4, 0.5, 0.6] $
-  - "like" (ID 2): $ E[2] = [0.7, 0.8, 0.9] $
-  - "cats" (ID 3): $ E[3] = [0.1, 0.2, 0.3] $
+  - "I" (ID 1): $E[1] = [0.4, 0.5, 0.6]$
+  - "like" (ID 2): $E[2] = [0.7, 0.8, 0.9]$
+  - "cats" (ID 3): $E[3] = [0.1, 0.2, 0.3]$
 
 The token embedding layer outputs a matrix:
-$ X_{\text{emb}} = \begin{bmatrix} 
+$X_{\text{emb}} = \begin{bmatrix} 
   0.4 & 0.5 & 0.6 \\
   0.7 & 0.8 & 0.9 \\
   0.1 & 0.2 & 0.3 
-\end{bmatrix}
-$
+\end{bmatrix}$
 
 ### Positional Encoding
 
-In this implementation, positional encodings are learned embeddings, allowing the model to discover optimal position representations through training. Each position in the input sequence has a corresponding embedding in a positional embedding table, with dimensions $ \text{block size} \times d_{\text{model}} $.
+In this implementation, positional encodings are learned embeddings, allowing the model to discover optimal position representations through training. Each position in the input sequence has a corresponding embedding in a positional embedding table, with dimensions $\text{block size} \times d_{\text{model}}$.
 
 - **Positional Embedding Matrix**: 
-  $
-  P = \begin{bmatrix} 
+  $P = \begin{bmatrix} 
       p_{1,1} & p_{1,2} & p_{1,3} \\ 
       p_{2,1} & p_{2,2} & p_{2,3} \\ 
       \vdots & \vdots & \vdots \\
       p_{T,1} & p_{T,2} & p_{T,3}
-  \end{bmatrix}
-  $
-  where $ T $ is the sequence length (block size).
+  \end{bmatrix}$
+  where $T$ is the sequence length (block size).
 
 The positional embeddings are added element-wise to the token embeddings, giving each position a unique encoding:
 
@@ -81,33 +76,31 @@ $X_{\text{emb}} + P = \begin{bmatrix}
   0.4 + p_{1,1} & 0.5 + p_{1,2} & 0.6 + p_{1,3} \\ 
   0.7 + p_{2,1} & 0.8 + p_{2,2} & 0.9 + p_{2,3} \\ 
   0.1 + p_{3,1} & 0.2 + p_{3,2} & 0.3 + p_{3,3} 
-\end{bmatrix}
-$
+\end{bmatrix}$
 
-We add $ \text{PE} $ to $ X_{\text{emb}} $ for a combined embedding.
+We add $\text{PE}$ to $X_{\text{emb}}$ for a combined embedding.
 
 ### Self-Attention
 
-#### Step 1: Calculate $ Q, K, V $ Matrices
+#### Step 1: Calculate $Q, K, V$ Matrices
 
-We calculate query $ Q $, key $ K $, and value $ V $ matrices by multiplying $ X $ with learned weights $ W^Q $, $ W^K $, and $ W^V $, each sized $ d_{\text{model}} \times d_k $ (assume $ d_k = d_{\text{model}} $ for simplicity).
+We calculate query $Q$, key $K$, and value $V$ matrices by multiplying $X$ with learned weights $W^Q$, $W^K$, and $W^V$, each sized $d_{\text{model}} \times d_k$ (assume $d_k = d_{\text{model}}$ for simplicity).
 
 Example:
 $Q = X W^Q, \quad K = X W^K, \quad V = X W^V$
 
 #### Step 2: Scaled Dot-Product Attention
 
-Attention scores are derived by calculating $ QK^T $ and scaling by $ \frac{1}{\sqrt{d_k}} $:
-$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right) V
-$
+Attention scores are derived by calculating $QK^T$ and scaling by $\frac{1}{\sqrt{d_k}}$:
+$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right) V$
 
-This step will show matrices for $ Q $, $ K $, and $ V $, intermediate products $ QK^T $, scaling, softmax, and the weighted sum result.
+This step will show matrices for $Q$, $K$, and $V$, intermediate products $QK^T$, scaling, softmax, and the weighted sum result.
 
 ### Feed-Forward Network
 
 The feed-forward network applies two linear transformations with a ReLU activation in between. For each token representation, we calculate:
-1. **Linear 1**: $ X_{\text{ffn}} = \text{ReLU}(X W_1 + b_1) $
-2. **Linear 2**: $ \text{output} = X_{\text{ffn}} W_2 + b_2 $
+1. **Linear 1**: $X_{\text{ffn}} = \text{ReLU}(X W_1 + b_1)$
+2. **Linear 2**: $\text{output} = X_{\text{ffn}} W_2 + b_2$
 
 Example weight matrices and their multiplication with attention outputs will be detailed here.
 
@@ -123,7 +116,6 @@ Each residual and normalization step will include calculations with intermediate
 
 ### Output Layer
 
-The output layer projects the processed embeddings back to the vocabulary size $ V $ with a linear transformation:
-$\text{logits} = X W_{\text{out}} + b_{\text{out}}
-$
-where $ W_{\text{out}} $ has dimensions $ d_{\text{model}} \times V $.
+The output layer projects the processed embeddings back to the vocabulary size $V$ with a linear transformation:
+$\text{logits} = X W_{\text{out}} + b_{\text{out}}$
+where $W_{\text{out}}$ has dimensions $d_{\text{model}} \times V$.
