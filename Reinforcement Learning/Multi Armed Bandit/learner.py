@@ -12,10 +12,10 @@ class Learner:
         - n_arms (int): The number of arms
         """
         
-        self.t = 0
-        self.n_arms = n_arms
-        self.rewards_per_arm = [[] for _ in range(n_arms)]
-        self.collected_rewards = np.array([])
+        self.t = 0 # Time
+        self.n_arms = n_arms # Number of arms
+        self.rewards_per_arm = [[] for _ in range(n_arms)] # Rewards for each arm
+        self.collected_rewards = np.array([]) # Collected rewards
 
 
     ### Public methods ###
