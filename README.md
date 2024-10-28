@@ -54,17 +54,23 @@ The project structure is organized into categories and subcategories for each al
 ├── Reinforcement Learning
 │   └── Multi Armed Bandit
 ├── Supervised Learning
-│   ├── K Nearest Neighbours
-│   ├── Linear Regression
-│   ├── Logistic Regression
-│   ├── Naive Bayes
-│   ├── Perceptron
-│   ├── Random Forests
-│   ├── Support Vector Machine
-│   └── Transformer
+│   ├── Classification
+│   │   ├── Logistic Regression
+│   │   ├── Naive Bayes
+│   │   └── Support Vector Machine
+│   ├── Regression
+│   │   └── Linear Regression
+│   ├── General Algorithms
+│   │   ├── K Nearest Neighbours
+│   │   ├── Perceptron
+│   │   └── Random Forests
+│   └── Deep Learning
+│       └── Transformer
 ├── Unsupervised Learning
-│   ├── K Means Clustering
-│   └── Principal Component Analysis
+│   ├── Clustering
+│   │   └── K Means Clustering
+│   └── Dimensionality Reduction
+│       └── Principal Component Analysis
 └── requirements.txt
 ```
 
@@ -102,7 +108,7 @@ The project structure is organized into categories and subcategories for each al
 Each algorithm comes with a `train.py` script that can be used to train the model with sample data. For example, to train the Linear Regression model:
 
 ```bash
-cd Supervised\ Learning/Linear\ Regression
+cd Supervised\ Learning/Regression/Linear\ Regression
 python train.py
 ```
 
