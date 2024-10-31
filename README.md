@@ -107,11 +107,4 @@ The project structure is organized into categories and subcategories for each al
 
 ## Usage
 
-Each algorithm comes with a `train.py` script that can be used to train the model with sample data. For example, to train the Linear Regression model:
-
-```bash
-cd Supervised\ Learning/Regression/Linear\ Regression
-python train.py
-```
-
-For algorithms that involve reinforcement learning, such as the Multi-Armed Bandit, the `train.py` script simulates the environment and evaluates the agent’s performance.
+Each algorithm comes with a `train.ipynb` notebook that can be used to train the model with sample data
