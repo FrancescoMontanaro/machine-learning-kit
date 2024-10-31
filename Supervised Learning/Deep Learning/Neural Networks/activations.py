@@ -52,7 +52,7 @@ class ReLU(_AbstractActivationFn):
         Compute the output of the ReLU activation function.
         
         Parameters:
-        - x (np.ndarray): Input to the activation function --> Shape: (batch_size, n_features)
+        - x (np.ndarray): Input to the activation function
         
         Returns:
         - np.ndarray: Output of the activation function
