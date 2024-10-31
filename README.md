@@ -1,5 +1,5 @@
 
-# Machine Learning kit
+# Machine Learning from Scratch
 
 This repository contains implementations of various machine learning algorithms developed from scratch for educational purposes. Each algorithm is implemented in Python and organized according to its category (Supervised, Unsupervised, or Reinforcement Learning). The code follows a clear structure, with each folder containing separate modules for the core algorithm and training routines.
 
@@ -65,6 +65,7 @@ The project structure is organized into categories and subcategories for each al
 │   │   ├── Perceptron
 │   │   └── Random Forests
 │   └── Deep Learning
+│       ├── Neural Networks
 │       └── Transformer
 ├── Unsupervised Learning
 │   ├── Clustering
@@ -92,7 +93,8 @@ The project structure is organized into categories and subcategories for each al
 5. **Perceptron**: A single-layer perceptron implementation for binary classification (`perceptron.py`).
 6. **Random Forest**: Ensemble method using multiple decision trees (`random_forest.py`).
 7. **Support Vector Machine (SVM)**: A linear SVM classifier using custom optimization (`svm.py`).
-8. **Transformer**: A custom transformer implementation for language modeling, including:
+8. **Neural Networks**: Feedforward neural network with different layers, activation functions, loss functions and  the implementation of the backpropagation algorithm (`neural_network.py`).
+9. **Transformer**: A custom transformer implementation for language modeling, including:
    - **Attention Mechanism** (`attention_mechanism.py`)
    - **Feed-Forward Network** (`feed_forward.py`)
    - **Regularization** (`regularization.py`)
