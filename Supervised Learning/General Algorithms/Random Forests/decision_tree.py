@@ -65,7 +65,7 @@ class DecisionTree:
 
     def _grow_tree(self, x: np.ndarray, y: np.ndarray, depth: int = 0) -> Node:
         """
-        Grow the tree
+        Recursive function to grow the decision tree
         
         Parameters:
         - x (np.ndarray): Features of the dataset
