@@ -9,7 +9,7 @@ from optimizers import _AbstractOptimizer
 from loss_functions import _AbstractLossFn
 
 
-class NeuralNetwork:
+class FeedForwardNeuralNetwork:
     
     ### Static attributes ###
     
