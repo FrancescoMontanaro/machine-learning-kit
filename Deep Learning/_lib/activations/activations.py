@@ -1,49 +1,9 @@
 import numpy as np
 
-
-class _AbstractActivationFn:
-    
-    ### Magic methods ###
-
-    def __call__(self, x: np.ndarray) -> np.ndarray:
-        """
-        Compute the output of the activation function.
-
-        Parameters:
-        - x (np.ndarray): Input to the activation function
-
-        Returns:
-        - np.ndarray: Output of the activation function
-        
-        Raises:
-        - NotImplementedError: If the method is not implemented
-        """
-        
-        # Raise an error if the method is not implemented
-        raise NotImplementedError("The method '__call__' is not implemented.")
+from .base import Activation
 
 
-    ### Public methods ###
-
-    def derivative(self, x: np.ndarray) -> np.ndarray:
-        """
-        Compute the derivative of the activation function.
-
-        Parameters:
-        - x (np.ndarray): Input to the activation function
-
-        Returns:
-        - np.ndarray: Derivative of the activation function
-        
-        Raises:
-        - NotImplementedError: If the method is not implemented
-        """
-        
-        # Raise an error if the method is not implemented
-        raise NotImplementedError("The method 'derivative' is not implemented.")
-
-
-class ReLU(_AbstractActivationFn):
+class ReLU(Activation):
     
     ### Magic methods ###
     
@@ -79,7 +39,7 @@ class ReLU(_AbstractActivationFn):
         return np.where(x > 0, 1, 0)
     
     
-class Sigmoid(_AbstractActivationFn):
+class Sigmoid(Activation):
     
     ### Magic methods ###
     
@@ -115,7 +75,7 @@ class Sigmoid(_AbstractActivationFn):
         return self(x) * (1 - self(x))
     
     
-class Softmax(_AbstractActivationFn):
+class Softmax(Activation):
         
     ### Magic methods ###
     
@@ -157,7 +117,7 @@ class Softmax(_AbstractActivationFn):
         return softmax_x * (1 - softmax_x)
 
 
-class Tanh(_AbstractActivationFn):
+class Tanh(Activation):
         
     ### Magic methods ###
     

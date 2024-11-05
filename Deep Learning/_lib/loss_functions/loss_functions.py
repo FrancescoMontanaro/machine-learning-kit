@@ -1,54 +1,11 @@
 import numpy as np
 
+from .base import LossFn
 
 epsilon = 1e-12  # Small constant for numerical stability
 
 
-class _AbstractLossFn:
-    
-    ### Magic methods ###
-
-    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """
-        Compute the loss.
-
-        Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
-
-        Returns:
-        - float: Loss value
-        
-        Raises:
-        - NotImplementedError: If the method is not implemented
-        """
-        
-        # Raise an error if the method is not implemented
-        raise NotImplementedError("The method '__call__' is not implemented.")
-
-
-    ### Public methods ###
-
-    def gradient(self, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
-        """
-        Compute the gradient of the loss with respect to y_pred.
-
-        Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
-
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to y_pred
-        
-        Raises:
-        - NotImplementedError: If the method is not implemented
-        """
-        
-        # Raise an error if the method is not implemented
-        raise NotImplementedError("The method 'gradient' is not implemented.")
-
-
-class MeanSquareError(_AbstractLossFn):
+class MeanSquareError(LossFn):
     
     ### Magic methods ###
 
@@ -89,7 +46,7 @@ class MeanSquareError(_AbstractLossFn):
         return (2 / batch_size) * (y_pred - y_true)
     
     
-class CrossEntropy(_AbstractLossFn):
+class CrossEntropy(LossFn):
         
     ### Magic methods ###
 
@@ -107,7 +64,7 @@ class CrossEntropy(_AbstractLossFn):
         
         # Extract the batch size
         batch_size = y_true.shape[0]
-
+        
         # Clip values for numerical stability
         y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
 
@@ -136,7 +93,7 @@ class CrossEntropy(_AbstractLossFn):
         return (y_pred - y_true) / batch_size
 
 
-class BinaryCrossEntropy(_AbstractLossFn):
+class BinaryCrossEntropy(LossFn):
             
     ### Magic methods ###
 

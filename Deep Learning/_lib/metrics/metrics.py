@@ -97,3 +97,25 @@ def f1_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     
     # Compute the F1 score
     return 2 * (prec * rec) / (prec + rec)
+
+
+def confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+    """
+    Compute the confusion matrix of the model.
+
+    Parameters:
+    - y_true (np.ndarray): True target variable
+    - y_pred (np.ndarray): Predicted target variable
+
+    Returns:
+    - np.ndarray: Confusion matrix
+    """
+    
+    # Compute the confusion matrix
+    tp = np.sum((y_true == 1) & (y_pred == 1))
+    tn = np.sum((y_true == 0) & (y_pred == 0))
+    fp = np.sum((y_true == 0) & (y_pred == 1))
+    fn = np.sum((y_true == 1) & (y_pred == 0))
+    
+    # Return the confusion matrix
+    return np.array([[tn, fp], [fn, tp]])

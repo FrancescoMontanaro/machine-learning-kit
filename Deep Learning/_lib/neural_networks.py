@@ -2,14 +2,14 @@ import re
 import numpy as np
 from itertools import count
 from typing import Callable
-from utils import shuffle_data
 
-from layers import _AbstractLayer
-from optimizers import _AbstractOptimizer
-from loss_functions import _AbstractLossFn
+from .utils import *
+from .layers import Layer
+from .optimizers import Optimizer
+from .loss_functions import LossFn
 
 
-class FeedForwardNeuralNetwork:
+class FeedForward:
     
     ### Static attributes ###
     
@@ -18,7 +18,7 @@ class FeedForwardNeuralNetwork:
     
     ### Magic methods ###
     
-    def __init__(self, layers: list[_AbstractLayer]) -> None:
+    def __init__(self, layers: list[Layer]) -> None:
         """
         Class constructor
         
@@ -31,7 +31,11 @@ class FeedForwardNeuralNetwork:
         
         # List of layers
         self.layers = layers
+        
+        # Model settings
         self.training = False
+        self.layers_outputs = {}
+        self.layers_grads = {}
         
         # Get the count of how many NeuralNetwork instances have been created
         self.id = next(self._ids)
@@ -41,22 +45,22 @@ class FeedForwardNeuralNetwork:
             # Set the layer name if it is not set
             if not layer.name:
                 # Get the class name of the layer
-                layer.name = f"{re.sub(r'(?<!^)(?=[A-Z])', '_', layer.__class__.__name__).lower().lower()}_{i+1}"
+                layer.name = f"{re.sub(r'(?<!^)(?=[A-Z0-9])', '_', layer.__class__.__name__).lower()}_{i+1}"
                 
         # Check if the layers have unique names
         if len(set([layer.name for layer in self.layers])) != len(self.layers):
             raise ValueError("Layer names must be unique!")
         
         
-    ### Public methods ###
-    
-    def set_input_shape(self, batch_size: int, n_features: int) -> None:
+    def __call__(self, x: np.ndarray) -> np.ndarray:
         """
-        Method to set the input shape of the neural network
+        Call method to initialize and execute the forward pass of the neural network
         
         Parameters:
-        - batch_size (int): Number of samples in each batch
-        - n_features (int): Number of features in the input dataset
+        - x (np.ndarray): Input data. Shape: (Batch size, ...)
+        
+        Returns:
+        - np.ndarray: Output of the neural network
         
         Raises:
         - ValueError: If the number of layers is 0
@@ -67,22 +71,25 @@ class FeedForwardNeuralNetwork:
             raise ValueError("No layers in the neural network. Add layers to the model!")
         
         # Save the input dimension
-        self.input_shape = (batch_size, n_features)
+        self.input_shape = x.shape
         
-        # Iterate over the layers
-        for i, layer in enumerate(self.layers):
-            # Initialize the parameters of the layer
-            layer.set_input_shape(self.input_shape if i == 0 else self.layers[i - 1].output_shape())
-      
-          
+        # Set the model in evaluation mode
+        self.eval()
+        
+        # Execute a first forward pass to initialize the parameters
+        return self.forward(x)
+        
+        
+    ### Public methods ###      
+
     def fit(
         self, 
         X_train: np.ndarray, 
         y_train: np.ndarray,
         X_valid: np.ndarray,
         y_valid: np.ndarray,
-        optimizer: _AbstractOptimizer,
-        loss_fn: _AbstractLossFn,
+        optimizer: Optimizer,
+        loss_fn: LossFn,
         batch_size: int = 8, 
         epochs: int = 10,
         metrics: list[Callable] = []
@@ -91,12 +98,12 @@ class FeedForwardNeuralNetwork:
         Method to train the neural network
         
         Parameters:
-        - X_train (np.ndarray): Features of the training dataset
-        - y_train (np.ndarray): Labels of the training dataset
-        - X_valid (np.ndarray): Features of the validation dataset
-        - y_valid (np.ndarray): Labels of the validation dataset
-        - optimizer (_AbstractOptimizer): Optimizer to update the parameters of the model
-        - loss_fn (_AbstractLossFn): Loss function to compute the error of the model
+        - X_train (np.ndarray): Features of the training dataset. Shape: (samples, ...)
+        - y_train (np.ndarray): Labels of the training dataset. Shape: (samples, ...)
+        - X_valid (np.ndarray): Features of the validation dataset. Shape: (samples, ...)
+        - y_valid (np.ndarray): Labels of the validation dataset. Shape: (samples, ...)
+        - optimizer (Optimizer): Optimizer to update the parameters of the model
+        - loss_fn (LossFn): Loss function to compute the error of the model
         - batch_size (int): Number of samples to use for each batch. Default is 32
         - epochs (int): Number of epochs to train the model. Default is 10
         - metrics (list[Callable]): List of metrics to evaluate the model. Default is an empty list
@@ -104,20 +111,6 @@ class FeedForwardNeuralNetwork:
         Returns:
         - dict[str, np.ndarray]: Dictionary containing the training and validation losses
         """
-        
-        # The input shape must be a 2D array (samples, features) 
-        if len(X_train.shape) != 2 or len(X_valid.shape) != 2:
-            raise ValueError("The input shape must be a 2D array (samples, features)")
-        
-        # The output shape must be a 2D array (samples, features)
-        if len(y_train.shape) != 2 or len(y_valid.shape) != 2:
-            raise ValueError("The output shape must be a 2D array (samples, labels)")
-        
-        # Initialize the shape of the layers and 
-        self.set_input_shape(batch_size=batch_size, n_features=X_train.shape[1])
-        
-        # Split the dataset into batches
-        n_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
         
         # Initialize the history of the training
         history = {
@@ -131,18 +124,31 @@ class FeedForwardNeuralNetwork:
             }
         }
         
+        # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
+        self(X_train[:1])
+        
+        # Add the optimizer to the layers
+        for layer in self.layers:
+            layer.optimizer = optimizer
+        
+        # Compute the number of steps per epoch based on the batch size
+        n_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
+        
         # Iterate over the epochs
         for epoch in range(epochs):
-            # Shuffle the dataset
-            X_train_shuffled, Y_train_shuffled = shuffle_data(X_train, y_train)
+            
+            ### Training phase ###
             
             # Set the model in training mode
             self.train()
             
+            # Shuffle the dataset at the beginning of each epoch
+            X_train_shuffled, Y_train_shuffled = shuffle_data(X_train, y_train)
+            
             # Iterate over the batches
             epoch_loss = 0.0
             for step in range(n_steps):
-                # Get the current batch
+                # Get the current batch of data
                 X_batch = X_train_shuffled[step * batch_size:(step + 1) * batch_size]
                 y_batch = Y_train_shuffled[step * batch_size:(step + 1) * batch_size]
                 
@@ -156,10 +162,13 @@ class FeedForwardNeuralNetwork:
                 loss_grad = loss_fn.gradient(y_batch, batch_output)
                 
                 # Backward pass: Propagate the gradient through the model and update the parameters
-                self.backward(loss_grad, optimizer)
+                self.backward(loss_grad)
                 
                 # Update the epoch loss
                 epoch_loss += loss
+                
+                
+            ### Validation phase ###
                     
             # Set the model in evaluation mode
             self.eval()
@@ -186,11 +195,11 @@ class FeedForwardNeuralNetwork:
                 f"Epoch {epoch + 1}/{epochs} --> "
                 f"Training loss: {history['train']['loss'][-1]:.4f} "
                 + " ".join(
-                    [f"- Training {metric.__name__.replace("_", " ")}: {history['train']['metrics'][metric.__name__][-1]:.4f}" for metric in metrics]
+                    [f"- Training {metric.__name__.replace('_', ' ')}: {history['train']['metrics'][metric.__name__][-1]:.4f}" for metric in metrics]
                 )
                 + f" | Validation loss: {history['valid']['loss'][-1]:.4f} "
                 + " ".join(
-                    [f"- Validation {metric.__name__.replace("_", " ")}: {history['valid']['metrics'][metric.__name__][-1]:.4f}" for metric in metrics]
+                    [f"- Validation {metric.__name__.replace('_', ' ')}: {history['valid']['metrics'][metric.__name__][-1]:.4f}" for metric in metrics]
                 )
             )
          
@@ -209,37 +218,45 @@ class FeedForwardNeuralNetwork:
         - np.ndarray: Output of the neural network
         """
         
+        # create a dictionary to store the output of each layer
+        self.layers_outputs = {}
+        
         # Copy the input
         out = np.copy(x)
         
         # Iterate over the layers
         for layer in self.layers:
             # Compute the output of the layer and pass it to the next one
-            out = layer.forward(out)
-        
-        # Return the output
+            out = layer(out)
+            
+            # Store the output of the layer
+            self.layers_outputs[layer.name] = out
+            
+        # Return the output of each layer of the neural network
         return out
     
     
-    def backward(self, loss_grad: np.ndarray, optimizer: _AbstractOptimizer) -> np.ndarray:
+    def backward(self, loss_grad: np.ndarray) -> np.ndarray:
         """
         Backward pass of the neural network
         
         Parameters:
         - loss_grad (np.ndarray): Gradient of the loss with respect to the output of the neural network
-        - optimizer (_AbstractOptimizer): Optimizer to update the parameters of the neural network
         
         Returns:
         - np.ndarray: Gradient of the loss with respect to the input of the neural network
         """
         
+        # Create a dictionary to store the gradient of each layer
+        self.layers_grads = {}
+        
         # Iterate over the layers in reverse order
         for layer in reversed(self.layers):
-            # Set the layer id for the optimizer to update the parameters
-            optimizer.layer_id = layer.get_uuid()
+            # Store the gradient of the layer
+            self.layers_grads[layer.name] = loss_grad
             
             # Compute the gradient of the loss with respect to the input of the layer
-            loss_grad = layer.backward(loss_grad, optimizer)
+            loss_grad = layer.backward(loss_grad)
         
         # Return the gradient
         return loss_grad

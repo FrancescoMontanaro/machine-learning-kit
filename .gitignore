@@ -4,3 +4,4 @@ __pycache__/
 venv
 dataset/
 .dev/
+compare_models.py
