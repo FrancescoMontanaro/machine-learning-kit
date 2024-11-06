@@ -33,8 +33,11 @@ class Conv2D(Layer):
         self.padding = padding
         self.stride = stride
         
-        # Creating the filters 
+        # Initializing the filters and bias
         self.filters = None
+        self.bias = None
+        
+        # Initializing the input shape
         self.input_shape = None
     
         
@@ -104,6 +107,7 @@ class Conv2D(Layer):
         
         # Assert that the filters are initialized
         assert self.filters is not None, "Filters are not initialized. Please call the layer with some input data to initialize the filters."
+        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Extract the required dimensions for a better interpretation
         input_batch_size, input_height, input_width, _ = x.shape # Shape of the input data
@@ -126,7 +130,7 @@ class Conv2D(Layer):
                 # Iterate over the filters
                 for k in range(num_filters):
                     # Compute the convolution
-                    output[:, i//stride_height, j//stride_width, k] = np.sum(window * self.filters[k])
+                    output[:, i//stride_height, j//stride_width, k] = np.sum(window * self.filters[k]) + self.bias[k]
         
         return output
     
@@ -173,13 +177,14 @@ class Conv2D(Layer):
         - int: number of parameters in the Conv2D layer
         
         Raises:
-        - AssertionError: if the filters are not initialized
+        - AssertionError: if the filters or bias are not initialized
         """
         
         # Assert that the filters are initialized
         assert self.filters is not None, "Filters are not initialized. Please call the layer with some input data to initialize the filters."
+        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
-        return int(np.prod(self.filters.shape)) # num_filters * kernel_size[0] * kernel_size[1] * num_channels
+        return int(np.prod(self.filters.shape)) + int(np.prod(self.bias.shape)) # num_filters * kernel_size[0] * kernel_size[1] * num_channels + num_filters
     
     
     def init_params(self, num_channels: int) -> None:
@@ -193,5 +198,6 @@ class Conv2D(Layer):
         # Extract the dimensions of the kernel
         kernel_height, kernel_width = self.kernel_size
         
-        # Initializing the filters with random values and normalizing them
+        # Initializing the filters and bias with random values and normalizing them
         self.filters = np.random.randn(self.num_filters, kernel_height, kernel_width, num_channels) / (kernel_height * kernel_width)
+        self.bias = np.zeros(self.num_filters)
