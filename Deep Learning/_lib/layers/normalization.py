@@ -94,7 +94,16 @@ class BatchNormalization1D(Layer):
         
         Returns:
         - np.ndarray: The normalized tensor.
+        
+        Raises:
+        - AssertionError: If the gamma and beta parameters are not initialized or the running mean and variance are not set.
         """
+        
+        # Assert that the gamma and beta parameters are initialized and the running mean and variance are set
+        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
+        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        assert self.running_mean is not None, "Running mean is not initialized. Please call the layer with input data."
+        assert self.running_var is not None, "Running variance is not initialized. Please call the layer with input data."
         
         # The layer is in training phase
         if self.training:
@@ -103,8 +112,8 @@ class BatchNormalization1D(Layer):
             batch_var = x.var(axis=0)
 
             # Update running mean and variance
-            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * batch_mean # type: ignore
-            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * batch_var # type: ignore
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * batch_mean
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * batch_var
 
             # Use batch statistics for normalization
             mean = batch_mean
@@ -118,33 +127,37 @@ class BatchNormalization1D(Layer):
             
         # Normalize the input
         self.X_centered = x - mean
-        self.stddev_inv = 1 / np.sqrt(var + self.epsilon) # type: ignore
+        self.stddev_inv = 1 / np.sqrt(var + self.epsilon)
         self.X_norm = self.X_centered * self.stddev_inv
             
-        return self.gamma * self.X_norm + self.beta # type: ignore
+        return self.gamma * self.X_norm + self.beta
     
     
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the batch normalization layer.
+        Backward pass of the batch normalization layer (layer i)
         
         Parameters:
-        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer.
+        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: The gradient of the loss with respect to the input of the layer.
+        - np.ndarray: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        
+        Raises:
+        - AssertionError: If the gamma and beta parameters are not initialized or the optimizer is not set.
         """
         
-        # Check if the optimizer is set
-        if not isinstance(self.optimizer, Optimizer):
-            raise ValueError("Optimizer is not set. Please set an optimizer before training the model.")
+        # Assert that the gamma and beta parameters are initialized and the optimizer is set
+        assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
+        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
+        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
         
         # Number of samples in the batch
         batch_size = grad_output.shape[0]
         
         # Gradients with respect to gamma and beta
-        d_beta = np.sum(grad_output, axis=0)
-        d_gamma = np.sum(grad_output * self.X_norm, axis=0)
+        d_beta = np.sum(grad_output, axis=0) # dL/d_beta = dL/dO_i, the gradient with respect to the beta parameter
+        d_gamma = np.sum(grad_output * self.X_norm, axis=0) # dL/d_gamma = dL/dO_i * X_norm, the gradient with respect to the gamma parameter
 
         # Gradient with respect to the normalized input
         dx_hat = grad_output * self.gamma
@@ -156,13 +169,13 @@ class BatchNormalization1D(Layer):
         d_mean = np.sum(dx_hat * -self.stddev_inv, axis=0) + d_var * np.mean(-2. * self.X_centered, axis=0)
 
         # Gradient with respect to input x
-        dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size)
+        dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size) # dL/dX_i ≡ dL/dO_{i-1}
         
         # Update the gamma parameter
         self.gamma = self.optimizer.update(
             layer = self,
             param_name = "gamma",
-            params = self.gamma, # type: ignore
+            params = self.gamma,
             grad_params = d_gamma
         )
         
@@ -170,11 +183,11 @@ class BatchNormalization1D(Layer):
         self.beta = self.optimizer.update(
             layer = self,
             param_name = "beta",
-            params = self.beta, # type: ignore
+            params = self.beta,
             grad_params = d_beta
         )
         
-        return dx
+        return dx # dL/dX_i ≡ dL/dO_{i-1}, to pass to the previous layer
     
     
     def count_params(self) -> int:
@@ -183,10 +196,17 @@ class BatchNormalization1D(Layer):
         
         Returns:
         - int: Number of parameters in the layer
+        
+        Raises:
+        - AssertionError: If the gamma and beta parameters are not initialized
         """
         
+        # Assert that the gamma and beta parameters are initialized
+        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
+        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        
         # Return the number of parameters in the layer
-        return self.gamma.size + self.beta.size # type: ignore
+        return self.gamma.size + self.beta.size
     
     
     def output_shape(self) -> tuple:
@@ -322,18 +342,22 @@ class LayerNormalization1D(Layer):
     
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the layer normalization layer.
+        Backward pass of the layer normalization layer (layer i)
         
         Parameters:
-        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer.
+        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: The gradient of the loss with respect to the input of the layer.
+        - np.ndarray: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        
+        Raises:
+        - AssertionError: If the gamma and beta parameters are not initialized or the optimizer is not set.
         """
         
-        # Check if the optimizer is set
-        if not isinstance(self.optimizer, Optimizer):
-            raise ValueError("Optimizer is not set. Please set an optimizer before training the model.")
+        # Assert that the gamma and beta parameters are initialized and the optimizer is set
+        assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
+        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
+        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
         
         # Extract the shape of the input
         batch_size = grad_output.shape[0]
@@ -342,17 +366,23 @@ class LayerNormalization1D(Layer):
         d_beta = grad_output.sum(axis=0)
         d_gamma = np.sum(grad_output * self.X_norm, axis=0)
         
-        # Compute the gradient of the loss with respect to the input
-        dx_norm = grad_output * self.gamma
-        d_var = np.sum(dx_norm * self.X_centered, axis=0) * -0.5 * self.stddev_inv**3
-        d_mean = np.sum(dx_norm * -self.stddev_inv, axis=0) + d_var * np.mean(-2 * self.X_centered, axis=0)
-        d_x = (dx_norm * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size)
+        # Gradient with respect to the normalized input
+        dx_hat = grad_output * self.gamma
+        
+        # Gradient with respect to variance
+        d_var = np.sum(dx_hat * self.X_centered, axis=0) * -0.5 * self.stddev_inv**3
+        
+        # Gradient with respect to mean
+        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=0) + d_var * np.mean(-2. * self.X_centered, axis=0)
+
+        # Gradient with respect to input x
+        dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size) # dL/dX_i ≡ dL/dO_{i-1}
         
         # Update the gamma parameter
         self.gamma = self.optimizer.update(
             layer = self,
             param_name = "gamma",
-            params = self.gamma, # type: ignore
+            params = self.gamma,
             grad_params = d_gamma
         )
         
@@ -360,12 +390,12 @@ class LayerNormalization1D(Layer):
         self.beta = self.optimizer.update(
             layer = self,
             param_name = "beta",
-            params = self.beta, # type: ignore
+            params = self.beta,
             grad_params = d_beta
         )
         
         # Return the gradients of the loss with respect to the input
-        return d_x
+        return dx # dL/dX_i ≡ dL/dO_{i-1}
     
     
     def count_params(self) -> int:
@@ -374,10 +404,17 @@ class LayerNormalization1D(Layer):
         
         Returns:
         - int: Number of parameters in the layer
+        
+        Raises:
+        - AssertionError: If the gamma and beta parameters are not initialized
         """
         
+        # Assert that the gamma and beta parameters are initialized
+        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
+        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        
         # Return the number of parameters in the layer
-        return self.gamma.size + self.beta.size # type: ignore
+        return self.gamma.size + self.beta.size
     
     
     def output_shape(self) -> tuple:

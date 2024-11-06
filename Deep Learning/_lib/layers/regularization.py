@@ -73,17 +73,17 @@ class Dropout(Layer):
     
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the dropout layer.
+        Backward pass of the dropout layer (layer i)
         
         Parameters:
-        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer.
+        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: The gradient of the loss with respect to the input of the layer.
+        - np.ndarray: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         """
         
-        # Scale the gradient
-        return grad_output * self.mask / (1 - self.rate)
+        # Scale the gradient by the mask
+        return grad_output * self.mask / (1 - self.rate) # dL/dX_i ≡ dL/dO_{i-1}, to pass to the previous layer
     
     
     def output_shape(self) -> tuple:

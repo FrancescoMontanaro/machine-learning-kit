@@ -89,14 +89,18 @@ class Dense(Layer):
         - np.ndarray: Output of the layer
         
         Raises:
-        - ValueError: If the weights and bias are not initialized
+        - AssertionError: If the weights and bias are not initialized
         """
+        
+        # Assert that the weights and bias are initialized
+        assert self.weights is not None, "Weights are not initialized. Please call the layer with some input data to initialize the weights."
+        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Store the input for the backward pass
         self.input = x
         
         # Compute the linear combination of the weights and features
-        self.linear_comb = np.dot(x, self.weights) + self.bias # type: ignore
+        self.linear_comb = np.dot(x, self.weights) + self.bias
         
         # Return the output of the neuron
         return self.activation(self.linear_comb) if self.activation is not None else self.linear_comb
@@ -104,44 +108,42 @@ class Dense(Layer):
     
     def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
         """
-        Method to compute the gradient of the loss with respect to the input of the layer
+        Backward pass of the layer (layer i)
         
         Parameters:
-        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of the layer
+        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the layer
+        - np.ndarray: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         
         Raises:
-        - ValueError: If the optimizer is not set
+        - AssertionError: If the weights and bias are not initialized
         """
         
-        # Check if the optimizer is set
-        if not isinstance(self.optimizer, Optimizer):
-            raise ValueError("Optimizer is not set. Please set an optimizer before training the model.")
+        # Assert that the weights and bias are initialized
+        assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
+        assert self.weights is not None, "Weights are not initialized. Please call the layer with some input data to initialize the weights."
+        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Compute the gradient of the loss with respect to the input
         if self.activation is not None:
-            # Compute derivative of the activation function
-            activation_derivative = self.activation.derivative(self.linear_comb)
-            
             # Multiply the incoming gradient by the activation derivative
-            gradient = loss_gradient * activation_derivative
+            gradient = loss_gradient * self.activation.derivative(self.linear_comb) # dL/dO_i * dO_i/dX_i, where dO_i/dX_i is the activation derivative
             
         else:
             # If the activation function is not defined, the gradient is the same as the incoming gradient
-            gradient = loss_gradient
+            gradient = loss_gradient # dL/dO_i
 
         # Compute gradients with respect to input, weights, and biases
-        grad_input = np.dot(gradient, self.weights.T) # type: ignore
-        grad_weights = np.dot(self.input.T, gradient)
-        grad_bias = np.sum(gradient, axis=0)
+        grad_input = np.dot(gradient, self.weights.T) # dL/dX_i ≡ dL/dO_{i-1}, the gradient with respect to the input
+        grad_weights = np.dot(self.input.T, gradient) # dL/dW_ij, the gradient with respect to the weights
+        grad_bias = np.sum(gradient, axis=0) # dL/db_i, the gradient with respect to the bias
 
         # Update weights
         self.weights = self.optimizer.update(
             layer = self,
             param_name = "weights",
-            params = self.weights, # type: ignore
+            params = self.weights,
             grad_params = grad_weights
         )
         
@@ -149,11 +151,11 @@ class Dense(Layer):
         self.bias = self.optimizer.update(
             layer = self,
             param_name = "bias",
-            params = self.bias, # type: ignore
+            params = self.bias,
             grad_params = grad_bias
         )
 
-        return grad_input
+        return grad_input # dL/dX_i ≡ dL/dO_{i-1}, to pass to the previous layer
     
     
     def count_params(self) -> int:
@@ -162,10 +164,17 @@ class Dense(Layer):
         
         Returns:
         - int: Number of parameters in the layer
+        
+        Raises:
+        - AssertionError: If the weights and bias are not initialized
         """
         
+        # Assert that the weights and bias are initialized
+        assert self.weights is not None, "Weights are not initialized. Please call the layer with some input data to initialize the weights."
+        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
+        
         # Return the number of parameters in the layer
-        return self.weights.size + self.bias.size # type: ignore
+        return self.weights.size + self.bias.size
     
     
     def output_shape(self) -> tuple:

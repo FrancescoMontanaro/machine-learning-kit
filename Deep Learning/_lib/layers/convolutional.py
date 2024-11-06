@@ -97,7 +97,13 @@ class Conv2D(Layer):
         
         Returns:
         - np.ndarray: output data. Shape: (Batch size, Height, Width, Number of filters)
+        
+        Raises:
+        - AssertionError: if the filters are not initialized
         """
+        
+        # Assert that the filters are initialized
+        assert self.filters is not None, "Filters are not initialized. Please call the layer with some input data to initialize the filters."
         
         # Extract the required dimensions for a better interpretation
         input_batch_size, input_height, input_width, _ = x.shape # Shape of the input data
@@ -120,7 +126,7 @@ class Conv2D(Layer):
                 # Iterate over the filters
                 for k in range(num_filters):
                     # Compute the convolution
-                    output[:, i//stride_height, j//stride_width, k] = np.sum(window * self.filters[k]) # type: ignore
+                    output[:, i//stride_height, j//stride_width, k] = np.sum(window * self.filters[k])
         
         return output
     
@@ -134,10 +140,16 @@ class Conv2D(Layer):
         
         Raises:
         - ValueError: if the input shape is not set
+        
+        Raises:
+        - AssertionError: if the input shape is not set
         """
         
+        # Assert that the input shape is set
+        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        
         # Extract the dimensions
-        _, input_height, input_width, _ = self.input_shape # type: ignore
+        _, input_height, input_width, _ = self.input_shape
         kernel_height, kernel_width = self.kernel_size
         stride_height, stride_width = self.stride
         
@@ -161,10 +173,13 @@ class Conv2D(Layer):
         - int: number of parameters in the Conv2D layer
         
         Raises:
-        - ValueError: if the filters are not initialized
+        - AssertionError: if the filters are not initialized
         """
         
-        return int(np.prod(self.filters.shape)) # num_filters * kernel_size[0] * kernel_size[1] * num_channels # type: ignore
+        # Assert that the filters are initialized
+        assert self.filters is not None, "Filters are not initialized. Please call the layer with some input data to initialize the filters."
+        
+        return int(np.prod(self.filters.shape)) # num_filters * kernel_size[0] * kernel_size[1] * num_channels
     
     
     def init_params(self, num_channels: int) -> None:
