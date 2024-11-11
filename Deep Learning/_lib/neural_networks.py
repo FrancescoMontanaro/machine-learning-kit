@@ -34,6 +34,9 @@ class FeedForward:
         
         # Model settings
         self.training = False
+        self.stop_training = False
+        self.history = {}
+        self.epoch = 0
         self.layers_outputs = {}
         self.layers_grads = {}
         
@@ -92,8 +95,9 @@ class FeedForward:
         loss_fn: LossFn,
         batch_size: int = 8, 
         epochs: int = 10,
-        metrics: list[Callable] = []
-    ) -> dict[str, dict[str, np.ndarray]]:
+        metrics: list[Callable] = [],
+        callbacks: list[Callable] = []
+    ) -> dict[str, np.ndarray]:
         """
         Method to train the neural network
         
@@ -107,22 +111,22 @@ class FeedForward:
         - batch_size (int): Number of samples to use for each batch. Default is 32
         - epochs (int): Number of epochs to train the model. Default is 10
         - metrics (list[Callable]): List of metrics to evaluate the model. Default is an empty list
+        - callbacks (list[Callback]): List of callbacks to execute
         
         Returns:
         - dict[str, np.ndarray]: Dictionary containing the training and validation losses
         """
         
-        # Initialize the history of the training
-        history = {
-            "train": {
-                "loss": np.array([]),
-                "metrics": {metric.__name__: np.array([]) for metric in metrics}
-            },
-            "valid": {
-                "loss": np.array([]),
-                "metrics": {metric.__name__: np.array([]) for metric in metrics}
-            }
+        # Initialize the control variables
+        self.history = {
+            "loss": np.array([]),
+            **{f"{metric.__name__}": np.array([]) for metric in metrics},
+            "val_loss": np.array([]),
+            **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
         }
+        self.stop_training = False
+        self.epoch = 0
+        n_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
@@ -131,11 +135,8 @@ class FeedForward:
         for layer in self.layers:
             layer.optimizer = optimizer
         
-        # Compute the number of steps per epoch based on the batch size
-        n_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
-        
         # Iterate over the epochs
-        for epoch in range(epochs):
+        while self.epoch < epochs and not self.stop_training:
             
             ### Training phase ###
             
@@ -167,6 +168,8 @@ class FeedForward:
                 # Update the epoch loss
                 epoch_loss += loss
                 
+                # Display epoch progress
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((step + 1)/n_steps)*100), 2)}%) --> loss: {loss:.4f}", end="")
                 
             ### Validation phase ###
                     
@@ -177,8 +180,8 @@ class FeedForward:
             validation_output = self.forward(X_valid)
             
             # Store the training and validation losses
-            history["train"]["loss"] = np.append(history["train"]["loss"], epoch_loss / (X_train.shape[0] // batch_size))
-            history["valid"]["loss"] = np.append(history["valid"]["loss"], loss_fn(y_valid, validation_output))
+            self.history["loss"] = np.append(self.history["loss"], epoch_loss / (X_train.shape[0] // batch_size))
+            self.history["val_loss"] = np.append(self.history["val_loss"], loss_fn(y_valid, validation_output))
             
             # Compute the metrics
             for metric in metrics:
@@ -187,24 +190,32 @@ class FeedForward:
                 valid_metric = metric(y_valid, validation_output)
                 
                 # Store the metrics
-                history["train"]["metrics"][metric.__name__] = np.append(history["train"]["metrics"][metric.__name__], train_metric)
-                history["valid"]["metrics"][metric.__name__] = np.append(history["valid"]["metrics"][metric.__name__], valid_metric)
+                self.history[metric.__name__] = np.append(self.history[metric.__name__], train_metric)
+                self.history[f"val_{metric.__name__}"] = np.append(self.history[f"val_{metric.__name__}"], valid_metric)
             
             # Display progress with metrics
             print(
-                f"Epoch {epoch + 1}/{epochs} --> "
-                f"Training loss: {history['train']['loss'][-1]:.4f} "
+                f"\rEpoch {self.epoch + 1}/{epochs} --> "
+                f"loss: {self.history['loss'][-1]:.4f} "
                 + " ".join(
-                    [f"- Training {metric.__name__.replace('_', ' ')}: {history['train']['metrics'][metric.__name__][-1]:.4f}" for metric in metrics]
+                    [f"- {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1]:.4f}" for metric in metrics]
                 )
-                + f" | Validation loss: {history['valid']['loss'][-1]:.4f} "
+                + f" | Validation loss: {self.history['val_loss'][-1]:.4f} "
                 + " ".join(
-                    [f"- Validation {metric.__name__.replace('_', ' ')}: {history['valid']['metrics'][metric.__name__][-1]:.4f}" for metric in metrics]
+                    [f"- Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.4f}" for metric in metrics]
                 )
             )
+            
+            # Execute the callbacks
+            for callback in callbacks:
+                # Call the callback
+                callback(self)
+            
+            # Increment the epoch counter
+            self.epoch += 1
          
         # Return the history of the training   
-        return history
+        return self.history
         
         
     def forward(self, x: np.ndarray) -> np.ndarray:

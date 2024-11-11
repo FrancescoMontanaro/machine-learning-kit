@@ -85,7 +85,7 @@ def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xla
     """
     
     # Create a new figure
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 4))
     
     # Plot the training and validation loss
     plt.plot(train_loss, label="Training loss", color="blue")
@@ -101,7 +101,34 @@ def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xla
     
     # Show the plot
     plt.show()
+ 
+ 
+def plot_confusion_matrix(cm: np.ndarray, title: str = "Confusion Matrix") -> None:
+    """
+    Method to plot the confusion matrix
     
+    Parameters:
+    - cm (np.ndarray): Confusion matrix
+    - title (str): Title of the plot
+    """
+    
+    # Create a new figure
+    fig, ax = plt.subplots(figsize=(6, 6))
+    
+    # Plot the confusion matrix
+    ax.matshow(cm, cmap=plt.colormaps['Blues'], alpha=0.3)
+    
+    # Add the class labels
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(x=j, y=i, s=str(int(cm[i, j])), va='center', ha='center')
+    
+    # Showing the confusion matrix
+    plt.xlabel('Predictions', fontsize=12)
+    plt.ylabel('Actuals', fontsize=12)
+    plt.title(title, fontsize=12)
+    plt.show()
+   
     
 def one_hot_encoding(y: np.ndarray, n_classes: int) -> np.ndarray:
     """

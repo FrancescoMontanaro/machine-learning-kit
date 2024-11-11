@@ -166,6 +166,3 @@ class Layer:
         
         # Set the flag to True to indicate that the layer is initialized
         self.initialized = True
-        
-        # The implementation should be done in the child classes
-        pass

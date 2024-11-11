@@ -185,7 +185,11 @@ class Dense(Layer):
         - tuple: The shape of the output of the layer
         """
         
-        return (self.input_shape[0], self.num_units)
+        # Unpack the input shape for better readability
+        batch_size, num_features = self.input_shape
+        
+        # The output shape
+        return (batch_size, self.num_units) # (Batch size, number of units)
     
         
     def init_params(self, num_features: int) -> None:

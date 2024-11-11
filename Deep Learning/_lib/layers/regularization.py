@@ -36,12 +36,12 @@ class Dropout(Layer):
         - np.ndarray: Output of the layer after the forward pass.
         """
         
-        # Check if the input shape is valid
-        if len(x.shape) != 2:
-            raise ValueError(f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, number of features). Got shape: {x.shape}")
-        
         # Store the input dimension
         self.input_shape = x.shape # (Batch size, number of features)
+        
+        # Initialize the layer params
+        if not self.initialized:
+            self.init_params()
         
         # Forward pass
         return self.forward(x)

@@ -5,7 +5,7 @@ from .base import Layer
 from ..optimizers import Optimizer
 
 
-class BatchNormalization1D(Layer):
+class BatchNormalization(Layer):
     
     ### Magic methods ###
     
@@ -37,32 +37,27 @@ class BatchNormalization1D(Layer):
      
     def __call__(self, x: np.ndarray) -> np.ndarray:
         """
-        Method to set the input shape of the layer and initialize the scale and shift parameters
+        Method to set the input shape of the layer and initialize the scale and shift parameters.
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, number of features)
+        - x (np.ndarray): Input data. The shape can be of any dimension:
+            (batch_size, num_features) for 1D data
+            (batch_size, sequence_length, num_features) for 2D data
+            (batch_size, height, width, n_channels ≡ n_features) for 3D data
+            (batch_size, time, height, width, n_channels ≡ n_features) for 4D data
+            ...
         
         Returns:
         - np.ndarray: Output of the layer after the forward pass
-        
-        Raises:
-        - ValueError: If the input shape is not 2D
         """
         
-        # Check if the input shape is valid
-        if len(x.shape) != 2:
-            raise ValueError(f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, number of features). Got shape: {x.shape}")
-        
-        # Unpack the shape of the input data for better readability
-        batch_size, num_features = x.shape
-        
         # Store the input dimension
-        self.input_shape = (batch_size, num_features)
+        self.input_shape = x.shape
         
         # Check if the layer is initialized
         if not self.initialized:
             # Initialize the layer
-            self.init_params(num_features)
+            self.init_params()
         
         # Forward pass
         return self.forward(x)
@@ -89,8 +84,12 @@ class BatchNormalization1D(Layer):
         Forward pass of the batch normalization layer.
         
         Parameters:
-        - x (np.ndarray): The input tensor.
-        - training (bool): Whether the model is in training mode.
+        - x (np.ndarray): Input data. The shape can be of any dimension:
+            (batch_size, num_features) for 1D data
+            (batch_size, sequence_length, num_features) for 2D data
+            (batch_size, height, width, n_channels ≡ n_features) for 3D data
+            (batch_size, time, height, width, n_channels ≡ n_features) for 4D data
+            ...
         
         Returns:
         - np.ndarray: The normalized tensor.
@@ -105,11 +104,14 @@ class BatchNormalization1D(Layer):
         assert self.running_mean is not None, "Running mean is not initialized. Please call the layer with input data."
         assert self.running_var is not None, "Running variance is not initialized. Please call the layer with input data."
         
+        # Determine axes to compute mean and variance: all except the last dimension (features)
+        axes = tuple(range(len(x.shape) - 1))
+        
         # The layer is in training phase
         if self.training:
             # Calculate batch mean and variance
-            batch_mean = x.mean(axis=0)
-            batch_var = x.var(axis=0)
+            batch_mean = x.mean(axis=axes, keepdims=True)
+            batch_var = x.var(axis=axes, keepdims=True)
 
             # Update running mean and variance
             self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * batch_mean
@@ -155,18 +157,21 @@ class BatchNormalization1D(Layer):
         # Number of samples in the batch
         batch_size = grad_output.shape[0]
         
-        # Gradients with respect to gamma and beta
-        d_beta = np.sum(grad_output, axis=0) # dL/d_beta = dL/dO_i, the gradient with respect to the beta parameter
-        d_gamma = np.sum(grad_output * self.X_norm, axis=0) # dL/d_gamma = dL/dO_i * X_norm, the gradient with respect to the gamma parameter
+        # Determine axes: all except the last dimension (features)
+        axes = tuple(range(len(grad_output.shape) - 1))
+        
+        # Gradients of beta and gamma
+        d_beta = np.sum(grad_output, axis=axes, keepdims=True) # dL/d_beta = dL/dO_i, the gradient with respect to the beta parameter
+        d_gamma = np.sum(grad_output * self.X_norm, axis=axes, keepdims=True) # dL/d_gamma = dL/dO_i * X_norm, the gradient with respect to the gamma parameter
 
         # Gradient with respect to the normalized input
         dx_hat = grad_output * self.gamma
         
         # Gradient with respect to variance
-        d_var = np.sum(dx_hat * self.X_centered, axis=0) * -0.5 * self.stddev_inv**3
+        d_var = np.sum(dx_hat * self.X_centered, axis=axes) * -0.5 * self.stddev_inv**3
         
         # Gradient with respect to mean
-        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=0) + d_var * np.mean(-2. * self.X_centered, axis=0)
+        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=axes) + d_var * np.mean(-2. * self.X_centered, axis=axes)
 
         # Gradient with respect to input x
         dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size) # dL/dX_i ≡ dL/dO_{i-1}
@@ -220,13 +225,19 @@ class BatchNormalization1D(Layer):
         return self.input_shape
     
     
-    def init_params(self, num_features: int) -> None:
+    def init_params(self) -> None:
         """
         Method to initialize the parameters of the layer
         
-        Parameters:
-        - num_features (int): The number of features in the input data
+        Raises:
+        - AssertionError: If the input shape is not set
         """
+        
+        # Assert that the input shape is set
+        assert self.input_shape is not None, "Input shape is not set. Please call the layer with input data."
+        
+        # Extract the shape of the parameters
+        num_features = self.input_shape[-1]
         
         # Initialize the scale and shift parameters
         self.gamma = np.ones(num_features)
@@ -240,7 +251,7 @@ class BatchNormalization1D(Layer):
         self.initialized = True
  
 
-class LayerNormalization1D(Layer):
+class LayerNormalization(Layer):
     
     ### Magic methods ###
     
@@ -271,7 +282,12 @@ class LayerNormalization1D(Layer):
         Method to set the input shape of the layer and initialize the scale and shift parameters
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, number of features)
+        - x (np.ndarray): Input data. The shape can be of any dimension:
+            (batch_size, num_features) for 1D data
+            (batch_size, sequence_length, num_features) for 2D data
+            (batch_size, height, width, n_channels ≡ n_features) for 3D data
+            (batch_size, time, height, width, n_channels ≡ n_features) for 4D data
+            ...
         
         Returns:
         - np.ndarray: Output of the layer after the forward pass
@@ -280,20 +296,13 @@ class LayerNormalization1D(Layer):
         - ValueError: If the input shape is not 2D
         """
         
-        # Check if the input shape is valid
-        if len(x.shape) != 2:
-            raise ValueError(f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, number of features). Got shape: {x.shape}")
-                
-        # Unpack the shape of the input data for better readability
-        batch_size, num_features = x.shape
-        
         # Store the input dimension
-        self.input_shape = (batch_size, num_features)
+        self.input_shape = x.shape
         
         # Check if the layer is initialized
         if not self.initialized:
             # Initialize the layer
-            self.init_params(num_features)
+            self.init_params()
         
         # Forward pass
         return self.forward(x)
@@ -320,16 +329,24 @@ class LayerNormalization1D(Layer):
         Forward pass of the layer normalization layer.
         
         Parameters:
-        - x (np.ndarray): The input tensor. Shape: (Batch size, number of features)
-        - training (bool): Whether the model is in training mode.
+        - x (np.ndarray): Input data. The shape can be of any dimension:
+            (batch_size, num_features) for 1D data
+            (batch_size, sequence_length, num_features) for 2D data
+            (batch_size, height, width, n_channels ≡ n_features) for 3D data
+            (batch_size, time, height, width, n_channels ≡ n_features) for 4D data
+            ...
+        
         
         Returns:
         - np.ndarray: The normalized tensor.
         """
         
+        # Extract the axis along which to compute the mean and variance: all except the batch dimension
+        axes = tuple(range(1, len(x.shape)))
+        
         # Compute mean and variance along the feature dimension for each sample
-        layer_mean = x.mean(axis=1, keepdims=True)
-        layer_var = x.var(axis=1, keepdims=True)
+        layer_mean = x.mean(axis=axes, keepdims=True)
+        layer_var = x.var(axis=axes, keepdims=True)
         
         # Normalize the input
         self.X_centered = x - layer_mean
@@ -363,17 +380,17 @@ class LayerNormalization1D(Layer):
         batch_size = grad_output.shape[0]
         
         # Gradients of beta and gamma
-        d_beta = grad_output.sum(axis=0)
-        d_gamma = np.sum(grad_output * self.X_norm, axis=0)
+        d_beta = grad_output.sum(axis=tuple(range(grad_output.ndim - 1)), keepdims=True)
+        d_gamma = np.sum(grad_output * self.X_norm, axis=tuple(range(grad_output.ndim - 1)), keepdims=True)
         
         # Gradient with respect to the normalized input
         dx_hat = grad_output * self.gamma
         
         # Gradient with respect to variance
-        d_var = np.sum(dx_hat * self.X_centered, axis=0) * -0.5 * self.stddev_inv**3
+        d_var = np.sum(dx_hat * self.X_centered, axis=tuple(range(1, grad_output.ndim)), keepdims=True) * -0.5 * self.stddev_inv**3
         
         # Gradient with respect to mean
-        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=0) + d_var * np.mean(-2. * self.X_centered, axis=0)
+        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=tuple(range(1, grad_output.ndim)), keepdims=True) + d_var * np.mean(-2. * self.X_centered, axis=tuple(range(1, grad_output.ndim)), keepdims=True)
 
         # Gradient with respect to input x
         dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size) # dL/dX_i ≡ dL/dO_{i-1}
@@ -428,17 +445,23 @@ class LayerNormalization1D(Layer):
         return self.input_shape
 
     
-    def init_params(self, num_features: int) -> None:
+    def init_params(self) -> None:
         """
         Method to initialize the parameters of the layer
         
-        Parameters:
-        - num_features (int): The number of features in the input data
+        Raises:
+        - AssertionError: If the input shape is not set
         """
         
+        # Assert that the input shape is set
+        assert self.input_shape is not None, "Input shape is not set. Please call the layer with input data."
+        
+        # Extract the shape of the parameters: all except the batch dimension
+        feature_shape = self.input_shape[1:]
+        
         # Initialize the scale and shift parameters
-        self.gamma = np.ones(num_features)
-        self.beta = np.zeros(num_features)
+        self.gamma = np.ones(feature_shape)
+        self.beta = np.zeros(feature_shape)
         
         # Update the initialization flag
         self.initialized = True
