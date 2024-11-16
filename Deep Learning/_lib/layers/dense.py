@@ -1,4 +1,4 @@
-import numpy as np
+import tensorflow as tf
 from typing import Optional
 
 from .base import Layer
@@ -32,34 +32,29 @@ class Dense(Layer):
         self.bias = None
         
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to set the input shape of the layer and initialize the weights and bias
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, number of features)
+        - x (tf.Tensor): Input data. Shape: (Batch size, number of features)
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - tf.Tensor: Output of the layer after the forward pass
         
         Raises:
         - ValueError: If the input shape is not 2D
+        - AssertionError: If the batch size and number of features are not integers
         """
         
         # Check if the input shape is valid
         if len(x.shape) != 2:
-            raise ValueError(f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, number of features). Got shape: {x.shape}")
-        
-        # Unpack the shape of the input data for better readability
-        batch_size, num_features = x.shape
-        
-        # Store the input shape
-        self.input_shape = (batch_size, num_features)
+            raise ValueError(f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, number of features). Got shape: {len(x.shape)}")
         
         # Check if the layer is initialized
         if not self.initialized:
             # Initialize the layer
-            self.init_params(num_features)
+            self.init_params(x)
             
         # Return the output of the layer
         return self.forward(x)
@@ -78,43 +73,43 @@ class Dense(Layer):
         return {"weights": self.weights, "bias": self.bias}
     
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to compute the output of the layer
         
         Parameters:
-        - x (np.ndarray): Features of the dataset
+        - x (tf.Tensor): Features of the dataset
         
         Returns:
-        - np.ndarray: Output of the layer
+        - tf.Tensor: Output of the layer
         
         Raises:
         - AssertionError: If the weights and bias are not initialized
         """
         
         # Assert that the weights and bias are initialized
-        assert self.weights is not None, "Weights are not initialized. Please call the layer with some input data to initialize the weights."
-        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
+        assert isinstance(self.weights, tf.Tensor), "Weights are not initialized. Please call the layer with some input data to initialize the weights."
+        assert isinstance(self.bias, tf.Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Store the input for the backward pass
         self.input = x
         
         # Compute the linear combination of the weights and features
-        self.linear_comb = np.dot(x, self.weights) + self.bias
+        self.linear_comb = tf.add(tf.matmul(x, self.weights), self.bias)
         
         # Return the output of the neuron
         return self.activation(self.linear_comb) if self.activation is not None else self.linear_comb
     
     
-    def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
+    def backward(self, loss_gradient: tf.Tensor) -> tf.Tensor:
         """
         Backward pass of the layer (layer i)
         
         Parameters:
-        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of the layer: dL/dO_i
+        - loss_gradient (tf.Tensor): Gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        - tf.Tensor: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         
         Raises:
         - AssertionError: If the weights and bias are not initialized
@@ -122,22 +117,18 @@ class Dense(Layer):
         
         # Assert that the weights and bias are initialized
         assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
-        assert self.weights is not None, "Weights are not initialized. Please call the layer with some input data to initialize the weights."
-        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
+        assert isinstance(self.weights, tf.Tensor), "Weights are not initialized. Please call the layer with some input data to initialize the weights."
+        assert isinstance(self.bias, tf.Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
-        # Compute the gradient of the loss with respect to the input
+        # Apply the activation derivative if the activation function is set
         if self.activation is not None:
             # Multiply the incoming gradient by the activation derivative
-            gradient = loss_gradient * self.activation.derivative(self.linear_comb) # dL/dO_i * dO_i/dX_i, where dO_i/dX_i is the activation derivative
-            
-        else:
-            # If the activation function is not defined, the gradient is the same as the incoming gradient
-            gradient = loss_gradient # dL/dO_i
+            loss_gradient = tf.multiply(loss_gradient, tf.cast(self.activation.derivative(self.linear_comb), dtype=loss_gradient.dtype)) # dL/dO_i * dO_i/dX_i, where dO_i/dX_i is the activation derivative
 
         # Compute gradients with respect to input, weights, and biases
-        grad_input = np.dot(gradient, self.weights.T) # dL/dX_i ≡ dL/dO_{i-1}, the gradient with respect to the input
-        grad_weights = np.dot(self.input.T, gradient) # dL/dW_ij, the gradient with respect to the weights
-        grad_bias = np.sum(gradient, axis=0) # dL/db_i, the gradient with respect to the bias
+        grad_input = tf.matmul(loss_gradient, tf.transpose(self.weights)) # dL/dX_i ≡ dL/dO_{i-1}, the gradient with respect to the input
+        grad_weights = tf.matmul(tf.transpose(self.input), loss_gradient) # dL/dW_ij, the gradient with respect to the weights
+        grad_bias = tf.reduce_sum(loss_gradient, axis=0) # dL/db_i, the gradient with respect to the bias
 
         # Update weights
         self.weights = self.optimizer.update(
@@ -170,39 +161,45 @@ class Dense(Layer):
         """
         
         # Assert that the weights and bias are initialized
-        assert self.weights is not None, "Weights are not initialized. Please call the layer with some input data to initialize the weights."
-        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
+        assert isinstance(self.weights, tf.Tensor), "Weights are not initialized. Please call the layer with some input data to initialize the weights."
+        assert isinstance(self.bias, tf.Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Return the number of parameters in the layer
-        return self.weights.size + self.bias.size
+        return int(tf.add(tf.size(self.weights), tf.size(self.bias)))
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Method to return the output shape of the layer
         
         Returns:
-        - tuple: The shape of the output of the layer
+        - tf.TensorShape: Shape of the output data
         """
         
         # Unpack the input shape for better readability
-        batch_size, num_features = self.input_shape
+        batch_size, _ = self.input_shape
         
         # The output shape
-        return (batch_size, self.num_units) # (Batch size, number of units)
+        return tf.TensorShape((batch_size, self.num_units)) # (Batch size, number of units)
     
         
-    def init_params(self, num_features: int) -> None:
+    def init_params(self, x: tf.Tensor) -> None:
         """
         Method to initialize the weights and bias of the layer
         
         Parameters:
-        - num_features (int): Number of features in the input data
+        - x (tf.Tensor): Input data
         """
         
+        # Save the input shape
+        self.input_shape = x.shape
+        
+        # Unpack the input shape for better readability
+        _, num_features = self.input_shape
+        
         # Initialize the weights and bias with random values
-        self.weights = np.random.uniform(-np.sqrt(1 / num_features), np.sqrt(1 / num_features), (num_features, self.num_units))
-        self.bias = np.zeros(self.num_units)
+        self.weights = tf.cast(tf.random.uniform((num_features, self.num_units), tf.negative(tf.sqrt(tf.divide(1.0, num_features))), tf.sqrt(tf.divide(1.0, num_features))), dtype=x.dtype)
+        self.bias = tf.cast(tf.zeros(self.num_units), dtype=x.dtype)
         
         # Update the initialization flag
         self.initialized = True

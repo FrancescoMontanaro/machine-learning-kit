@@ -1,28 +1,87 @@
 import numpy as np
+import tensorflow as tf
+from typing import Optional
 import matplotlib.pyplot as plt
 
 
-def shuffle_data(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def get_batch(tensor: tf.Tensor, batch_size: int, index: int) -> tf.Tensor:
+    """
+    Method to extract a batch from a tensor of any shape.
+    The batch is extracted along the first axis.
+    
+    Parameters:
+    - tensor (tf.Tensor): Input tensor
+    - batch_size (int): Size of the batch
+    - index (int): Index of the batch to extract
+    """
+    
+    # Start index of the batch
+    begin = [index * batch_size] + [0] * (len(tensor.shape) - 1)
+    
+    # Size of the batch
+    size = [batch_size] + [-1] * (len(tensor.shape) - 1)
+    
+    # Extract the batch
+    return tf.slice(tensor, begin, size)
+
+
+def train_test_split(X: np.ndarray, y: np.ndarray, test_size: float = 0.2, seed: Optional[int] = None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Method to split the dataset into training and testing sets
+    
+    Parameters:
+    - X (tf.Tensor): Features of the dataset
+    - y (tf.Tensor): Target of the dataset
+    - test_size (float): Proportion of the dataset to include in the test split
+    - seed (int): Random seed for reproducibility
+    
+    Returns:
+    - tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: Training and testing sets
+    """
+    
+    # Calculate the number of samples in the test set
+    num_samples = X.shape[0]
+    test_size = int(num_samples * test_size)
+    
+    indices = np.arange(num_samples)
+    rng = np.random.default_rng(seed)  # Use default_rng for reproducibility with a seed
+    rng.shuffle(indices)
+    
+    # Split indices into train and test sets
+    test_indices = indices[:test_size]
+    train_indices = indices[test_size:]
+    
+    # Use indices to gather training and testing sets
+    X_train = X[train_indices]
+    X_test = X[test_indices]
+    y_train = y[train_indices]
+    y_test = y[test_indices]
+    
+    # Return the training and testing sets
+    return X_train, X_test, y_train, y_test
+
+
+def shuffle_data(X: tf.Tensor, y: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
     """
     Method to shuffle the dataset
     
     Parameters:
-    - X (np.ndarray): Features of the dataset
-    - y (np.ndarray): Target of the dataset
+    - X (tf.Tensor): Features of the dataset
+    - y (tf.Tensor): Target of the dataset
     
     Returns:
-    - tuple[np.ndarray, np.ndarray]: Shuffled features and target
+    - tuple[tf.Tensor, tf.Tensor]: Shuffled features and target
     """
     
     # Get the number of samples
     n_samples = X.shape[0]
     
     # Generate random indices
-    indices = np.random.permutation(n_samples)
+    indices = tf.random.shuffle(tf.range(n_samples))
     
     # Shuffle the dataset
-    X_shuffled = X[indices]
-    y_shuffled = y[indices]
+    X_shuffled = tf.gather(X, indices)
+    y_shuffled = tf.gather(y, indices)
     
     # Return the shuffled dataset
     return X_shuffled, y_shuffled

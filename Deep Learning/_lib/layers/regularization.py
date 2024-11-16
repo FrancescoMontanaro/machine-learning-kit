@@ -1,4 +1,4 @@
-import numpy as np
+import tensorflow as tf
 from typing import Optional
 
 from .base import Layer
@@ -25,23 +25,20 @@ class Dropout(Layer):
         self.mask = None
         
     
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to set the input shape of the layer.
         
         Parameters:
-        - x (np.ndarray): Input data.
+        - x (tf.Tensor): Input data.
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass.
+        - tf.Tensor: Output of the layer after the forward pass.
         """
-        
-        # Store the input dimension
-        self.input_shape = x.shape # (Batch size, number of features)
         
         # Initialize the layer params
         if not self.initialized:
-            self.init_params()
+            self.init_params(x)
         
         # Forward pass
         return self.forward(x)
@@ -49,49 +46,64 @@ class Dropout(Layer):
     
     ### Public methods ###
     
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Forward pass of the dropout layer.
         
         Parameters:
-        - x (np.ndarray): The input tensor.
+        - x (tf.Tensor): The input tensor.
         
         Returns:
-        - np.ndarray: The output tensor.
+        - tf.Tensor: The output tensor.
         """
         
         # Generate the mask
-        self.mask = np.random.rand(*x.shape) > self.rate
+        self.mask = tf.where(tf.greater(tf.random.uniform(x.shape), self.rate), tf.ones_like(x), tf.zeros_like(x))
         
         if self.training:
             # Scale the output during training
-            return x * self.mask / (1 - self.rate)
-        else:
-            # Return the output during inference
-            return x
+            return tf.divide(tf.multiply(x, self.mask), tf.cast(tf.subtract(1.0, self.rate), dtype=x.dtype))
+
+        # Return the output during inference
+        return x
     
     
-    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+    def backward(self, grad_output: tf.Tensor) -> tf.Tensor:
         """
         Backward pass of the dropout layer (layer i)
         
         Parameters:
-        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer: dL/dO_i
+        - grad_output (tf.Tensor): The gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        - tf.Tensor: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         """
         
         # Scale the gradient by the mask
-        return grad_output * self.mask / (1 - self.rate) # dL/dX_i ≡ dL/dO_{i-1}, to pass to the previous layer
+        return tf.divide(tf.multiply(grad_output, self.mask), tf.cast(tf.subtract(1.0, self.rate), dtype=grad_output.dtype))  # dL/dX_i ≡ dL/dO_{i-1}, to pass to the previous layer
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Method to return the output shape of the layer
         
         Returns:
-        - tuple: The shape of the output of the layer
+        - tf.TensorShape: Shape of the output data
         """
         
         return self.input_shape
+    
+    
+    def init_params(self, x: tf.Tensor) -> None:
+        """
+        Method to initialize the parameters of the layer
+        
+        Parameters:
+        - x (tf.Tensor): Input data
+        """
+        
+        # Save the input shape
+        self.input_shape = x.shape
+        
+        # The layer is initialized
+        self.initialized = True

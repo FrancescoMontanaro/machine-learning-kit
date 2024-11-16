@@ -1,5 +1,5 @@
-import numpy as np
 from typing import Any
+import tensorflow as tf
 
 
 class Optimizer:
@@ -17,18 +17,18 @@ class Optimizer:
     
     ### Public methods ###
 
-    def update(self, layer: Any, param_name: str, params: np.ndarray, grad_params: np.ndarray) -> np.ndarray:
+    def update(self, layer: Any, param_name: str, params: tf.Tensor, grad_params: tf.Tensor) -> tf.Tensor:
         """
         Abstract method to update the parameters of the model
         
         Parameters:
         - layer (Any): Instance of the Layer being optimized
         - param_name (str): Name of the parameters to be updated
-        - params (np.ndarray): Parameters to be updated
-        - grad_params (np.ndarray): Gradient of the parameters with respect to the loss
+        - params (tf.Tensor): Parameters to be updated
+        - grad_params (tf.Tensor): Gradient of the parameters with respect to the loss
         
         Returns:
-        - np.ndarray: Updated parameters
+        - tf.Tensor: Updated parameters
         """
         
         # Raise an error if the method is not implemented

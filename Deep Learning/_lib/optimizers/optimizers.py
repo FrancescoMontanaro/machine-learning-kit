@@ -1,5 +1,5 @@
-import numpy as np
 from typing import Any
+import tensorflow as tf
 
 from .base import Optimizer
 
@@ -31,18 +31,18 @@ class SGD(Optimizer):
     
     ### Public methods ###
     
-    def update(self, layer: Any, param_name: str, params: np.ndarray, grad_params: np.ndarray) -> np.ndarray:
+    def update(self, layer: Any, param_name: str, params: tf.Tensor, grad_params: tf.Tensor) -> tf.Tensor:
         """
         Method to update the parameters of the model.
         
         Parameters:
         - layer (Any): Instance of the Layer being optimized
         - param_name (str): Name of the parameters to be updated
-        - params (np.ndarray): Parameters of the model
-        - grad_params (np.ndarray): Gradient of the parameters
+        - params (tf.Tensor): Parameters of the model
+        - grad_params (tf.Tensor): Gradient of the parameters
         
         Returns:
-        - np.ndarray: Updated parameters
+        - tf.Tensor: Updated parameters
         """
         
         # Getting the layer id
@@ -58,19 +58,19 @@ class SGD(Optimizer):
 
         # Initialize specific parameter if missing
         if "velocity" not in self.params_registry[layer_id][param_name]:
-            self.params_registry[layer_id][param_name]["velocity"] = np.zeros_like(grad_params)
+            self.params_registry[layer_id][param_name]["velocity"] = tf.zeros_like(grad_params)
             
         # Get the velocity from the registry
         velocity = self.params_registry[layer_id][param_name]["velocity"]
             
         # Update the velocity
-        velocity = self.momentum * velocity - self.learning_rate * grad_params
+        velocity = tf.subtract(tf.multiply(self.momentum, velocity), tf.multiply(self.learning_rate, grad_params))
         
         # Save updated velocity to the registry
         self.params_registry[layer_id][param_name]["velocity"] = velocity
         
         # Update the parameters
-        return params + velocity
+        return tf.add(params, velocity)
     
     
 class Adam(Optimizer):
@@ -102,18 +102,18 @@ class Adam(Optimizer):
         
     ### Public methods ###
     
-    def update(self, layer: Any, param_name: str, params: np.ndarray, grad_params: np.ndarray) -> np.ndarray:
+    def update(self, layer: Any, param_name: str, params: tf.Tensor, grad_params: tf.Tensor) -> tf.Tensor:
         """
         Method to update the parameters of the model
         
         Parameters:
         - layer (Any): Instance of the Layer being optimized
         - param_name (str): Name of the parameters to be updated
-        - params (np.ndarray): Parameters of the model
-        - grad_params (np.ndarray): Gradient of the parameters
+        - params (tf.Tensor): Parameters of the model
+        - grad_params (tf.Tensor): Gradient of the parameters
         
         Returns:
-        - np.ndarray: Updated parameters
+        - tf.Tensor: Updated parameters
         """
         
         # Getting the layer id
@@ -130,8 +130,8 @@ class Adam(Optimizer):
         # Initialize the moments
         if "moments" not in self.params_registry[layer_id][param_name]:
             self.params_registry[layer_id][param_name]["moments"] = {
-                "m": np.zeros_like(grad_params),
-                "v": np.zeros_like(grad_params)
+                "m": tf.zeros_like(grad_params),
+                "v": tf.zeros_like(grad_params)
             }
             
         # Initialize the time step
@@ -147,12 +147,12 @@ class Adam(Optimizer):
         t += 1
         
         # Compute the first and second moment estimates
-        m = self.beta1 * m + (1 - self.beta1) * grad_params
-        v = self.beta2 * v + (1 - self.beta2) * (grad_params ** 2)
+        m = tf.add(tf.multiply(self.beta1, m), tf.multiply(1 - self.beta1, grad_params))
+        v = tf.add(tf.multiply(self.beta2, v), tf.multiply(1 - self.beta2, tf.square(grad_params)))
         
         # Compute the bias-corrected first and second moment estimates
-        m_hat = m / (1 - self.beta1 ** t)
-        v_hat = v / (1 - self.beta2 ** t)
+        m_hat = tf.divide(m, tf.subtract(1, tf.cast(tf.pow(self.beta1, t), dtype=m.dtype)))
+        v_hat = tf.divide(v, tf.subtract(1, tf.cast(tf.pow(self.beta2, t), dtype=v.dtype)))
         
         # Save updated moments and time step to the registry
         self.params_registry[layer_id][param_name]["moments"]["m"] = m
@@ -160,4 +160,13 @@ class Adam(Optimizer):
         self.params_registry[layer_id][param_name]["t"] = t
         
         # Update the parameters
-        return params - self.learning_rate * (m_hat / (np.sqrt(v_hat) + self.epsilon) + self.weight_decay * params)
+        return tf.subtract(
+            params,
+            tf.multiply(
+                self.learning_rate,
+                tf.add(
+                    tf.divide(m_hat, tf.add(tf.sqrt(v_hat), self.epsilon)),
+                    tf.multiply(self.weight_decay, params)
+                )
+            )
+        )

@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from typing import Optional
 
 from .base import Layer
@@ -35,12 +36,12 @@ class BatchNormalization(Layer):
         self.running_var = None
      
      
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to set the input shape of the layer and initialize the scale and shift parameters.
         
         Parameters:
-        - x (np.ndarray): Input data. The shape can be of any dimension:
+        - x (tf.Tensor): Input data. The shape can be of any dimension:
             (batch_size, num_features) for 1D data
             (batch_size, sequence_length, num_features) for 2D data
             (batch_size, height, width, n_channels ≡ n_features) for 3D data
@@ -48,16 +49,13 @@ class BatchNormalization(Layer):
             ...
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - tf.Tensor: Output of the layer after the forward pass
         """
-        
-        # Store the input dimension
-        self.input_shape = x.shape
         
         # Check if the layer is initialized
         if not self.initialized:
             # Initialize the layer
-            self.init_params()
+            self.init_params(x)
         
         # Forward pass
         return self.forward(x)
@@ -79,12 +77,12 @@ class BatchNormalization(Layer):
         }
     
     
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Forward pass of the batch normalization layer.
         
         Parameters:
-        - x (np.ndarray): Input data. The shape can be of any dimension:
+        - x (tf.Tensor): Input data. The shape can be of any dimension:
             (batch_size, num_features) for 1D data
             (batch_size, sequence_length, num_features) for 2D data
             (batch_size, height, width, n_channels ≡ n_features) for 3D data
@@ -92,17 +90,17 @@ class BatchNormalization(Layer):
             ...
         
         Returns:
-        - np.ndarray: The normalized tensor.
+        - tf.Tensor: The normalized tensor.
         
         Raises:
         - AssertionError: If the gamma and beta parameters are not initialized or the running mean and variance are not set.
         """
         
         # Assert that the gamma and beta parameters are initialized and the running mean and variance are set
-        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
-        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
-        assert self.running_mean is not None, "Running mean is not initialized. Please call the layer with input data."
-        assert self.running_var is not None, "Running variance is not initialized. Please call the layer with input data."
+        assert isinstance(self.gamma, tf.Tensor), "Gamma parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.beta, tf.Tensor), "Beta parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.running_mean, tf.Tensor), "Running mean is not initialized. Please call the layer with input data."
+        assert isinstance(self.running_var, tf.Tensor), "Running variance is not initialized. Please call the layer with input data."
         
         # Determine axes to compute mean and variance: all except the last dimension (features)
         axes = tuple(range(len(x.shape) - 1))
@@ -110,12 +108,12 @@ class BatchNormalization(Layer):
         # The layer is in training phase
         if self.training:
             # Calculate batch mean and variance
-            batch_mean = x.mean(axis=axes, keepdims=True)
-            batch_var = x.var(axis=axes, keepdims=True)
+            batch_mean = tf.reduce_mean(x, axis=axes, keepdims=True)
+            batch_var = tf.math.reduce_variance(x, axis=axes, keepdims=True)
 
             # Update running mean and variance
-            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * batch_mean
-            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * batch_var
+            self.running_mean = tf.add(tf.multiply(self.momentum, self.running_mean), tf.multiply(1 - self.momentum, batch_mean))
+            self.running_var = tf.add(tf.multiply(self.momentum, self.running_var), tf.multiply(1 - self.momentum, batch_var))
 
             # Use batch statistics for normalization
             mean = batch_mean
@@ -128,22 +126,23 @@ class BatchNormalization(Layer):
             var = self.running_var
             
         # Normalize the input
-        self.X_centered = x - mean
-        self.stddev_inv = 1 / np.sqrt(var + self.epsilon)
-        self.X_norm = self.X_centered * self.stddev_inv
+        self.X_centered = tf.subtract(x, mean)
+        self.stddev_inv = tf.math.rsqrt(tf.add(var, self.epsilon))
+        self.X_norm = tf.multiply(self.X_centered, self.stddev_inv)
             
-        return self.gamma * self.X_norm + self.beta
+        # Scale and shift
+        return tf.add(tf.multiply(self.gamma, self.X_norm), self.beta)
     
     
-    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+    def backward(self, grad_output: tf.Tensor) -> tf.Tensor:
         """
         Backward pass of the batch normalization layer (layer i)
         
         Parameters:
-        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer: dL/dO_i
+        - grad_output (tf.Tensor): The gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        - tf.Tensor: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         
         Raises:
         - AssertionError: If the gamma and beta parameters are not initialized or the optimizer is not set.
@@ -151,8 +150,8 @@ class BatchNormalization(Layer):
         
         # Assert that the gamma and beta parameters are initialized and the optimizer is set
         assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
-        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
-        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.gamma, tf.Tensor), "Gamma parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.beta, tf.Tensor), "Beta parameter is not initialized. Please call the layer with input data."
         
         # Number of samples in the batch
         batch_size = grad_output.shape[0]
@@ -161,20 +160,33 @@ class BatchNormalization(Layer):
         axes = tuple(range(len(grad_output.shape) - 1))
         
         # Gradients of beta and gamma
-        d_beta = np.sum(grad_output, axis=axes, keepdims=True) # dL/d_beta = dL/dO_i, the gradient with respect to the beta parameter
-        d_gamma = np.sum(grad_output * self.X_norm, axis=axes, keepdims=True) # dL/d_gamma = dL/dO_i * X_norm, the gradient with respect to the gamma parameter
+        d_beta = tf.reduce_sum(grad_output, axis=axes, keepdims=True) # dL/d_beta = dL/dO_i, the gradient with respect to the beta parameter
+        d_gamma = tf.reduce_sum(tf.multiply(grad_output, self.X_norm), axis=axes, keepdims=True) # dL/d_gamma = dL/dO_i * X_norm, the gradient with respect to the gamma parameter
 
         # Gradient with respect to the normalized input
-        dx_hat = grad_output * self.gamma
+        dx_hat = tf.multiply(grad_output, self.gamma)
         
         # Gradient with respect to variance
-        d_var = np.sum(dx_hat * self.X_centered, axis=axes) * -0.5 * self.stddev_inv**3
+        d_var = tf.multiply(tf.reduce_sum(tf.multiply(dx_hat, self.X_centered), axis=axes), -0.5, tf.pow(self.stddev_inv, 3))
         
         # Gradient with respect to mean
-        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=axes) + d_var * np.mean(-2. * self.X_centered, axis=axes)
+        d_mean = tf.add(tf.reduce_sum(tf.multiply(dx_hat, -self.stddev_inv), axis=axes), tf.multiply(d_var, tf.reduce_mean(tf.multiply(-2, self.X_centered), axis=axes)))
 
         # Gradient with respect to input x
-        dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size) # dL/dX_i ≡ dL/dO_{i-1}
+        dx = tf.add( # dL/dX_i ≡ dL/dO_{i-1}
+            tf.multiply(dx_hat, self.stddev_inv),
+            tf.divide(
+                tf.multiply(
+                    self.X_centered,
+                    tf.multiply(2, d_var),
+                ),
+                batch_size
+            ),
+            tf.divide(
+                d_mean,
+                batch_size
+            )
+        )
         
         # Update the gamma parameter
         self.gamma = self.optimizer.update(
@@ -207,45 +219,45 @@ class BatchNormalization(Layer):
         """
         
         # Assert that the gamma and beta parameters are initialized
-        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
-        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.gamma, tf.Tensor), "Gamma parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.beta, tf.Tensor), "Beta parameter is not initialized. Please call the layer with input data."
         
         # Return the number of parameters in the layer
-        return self.gamma.size + self.beta.size
+        return int(tf.add(tf.size(self.gamma), tf.size(self.beta)))
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Method to return the output shape of the layer
         
         Returns:
-        - tuple: The shape of the output of the layer
+        - tf.TensorShape: The shape of the output of the layer
         """
         
         return self.input_shape
     
     
-    def init_params(self) -> None:
+    def init_params(self, x: tf.Tensor) -> None:
         """
         Method to initialize the parameters of the layer
         
-        Raises:
-        - AssertionError: If the input shape is not set
+        Parameters:
+        - x (tf.Tensor): Input data
         """
         
-        # Assert that the input shape is set
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with input data."
+        # Store the input dimension
+        self.input_shape = x.shape
         
         # Extract the shape of the parameters
         num_features = self.input_shape[-1]
         
         # Initialize the scale and shift parameters
-        self.gamma = np.ones(num_features)
-        self.beta = np.zeros(num_features)
+        self.gamma = tf.cast(tf.ones(num_features), dtype=x.dtype)
+        self.beta = tf.cast(tf.zeros(num_features), dtype=x.dtype)
         
         # Initialize the running mean and variance
-        self.running_mean = np.zeros(num_features)
-        self.running_var = np.ones(num_features)
+        self.running_mean = tf.cast(tf.zeros(num_features), dtype=x.dtype)
+        self.running_var = tf.cast(tf.ones(num_features), dtype=x.dtype)
         
         # Update the initialization flag
         self.initialized = True
@@ -277,12 +289,12 @@ class LayerNormalization(Layer):
         self.beta = None
      
      
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to set the input shape of the layer and initialize the scale and shift parameters
         
         Parameters:
-        - x (np.ndarray): Input data. The shape can be of any dimension:
+        - x (tf.Tensor): Input data. The shape can be of any dimension:
             (batch_size, num_features) for 1D data
             (batch_size, sequence_length, num_features) for 2D data
             (batch_size, height, width, n_channels ≡ n_features) for 3D data
@@ -290,19 +302,16 @@ class LayerNormalization(Layer):
             ...
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - tf.Tensor: Output of the layer after the forward pass
         
         Raises:
         - ValueError: If the input shape is not 2D
         """
         
-        # Store the input dimension
-        self.input_shape = x.shape
-        
         # Check if the layer is initialized
         if not self.initialized:
             # Initialize the layer
-            self.init_params()
+            self.init_params(x)
         
         # Forward pass
         return self.forward(x)
@@ -324,12 +333,12 @@ class LayerNormalization(Layer):
         }
     
     
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Forward pass of the layer normalization layer.
         
         Parameters:
-        - x (np.ndarray): Input data. The shape can be of any dimension:
+        - x (tf.Tensor): Input data. The shape can be of any dimension:
             (batch_size, num_features) for 1D data
             (batch_size, sequence_length, num_features) for 2D data
             (batch_size, height, width, n_channels ≡ n_features) for 3D data
@@ -338,34 +347,34 @@ class LayerNormalization(Layer):
         
         
         Returns:
-        - np.ndarray: The normalized tensor.
+        - tf.Tensor: The normalized tensor.
         """
         
         # Extract the axis along which to compute the mean and variance: all except the batch dimension
         axes = tuple(range(1, len(x.shape)))
         
-        # Compute mean and variance along the feature dimension for each sample
-        layer_mean = x.mean(axis=axes, keepdims=True)
-        layer_var = x.var(axis=axes, keepdims=True)
+        # Compute mean and variance along the feature dimension for each sample        
+        layer_mean = tf.reduce_mean(x, axis=axes, keepdims=True)
+        layer_var = tf.math.reduce_variance(x, axis=axes, keepdims=True)
         
-        # Normalize the input
-        self.X_centered = x - layer_mean
-        self.stddev_inv = 1 / np.sqrt(layer_var + self.epsilon)
-        self.X_norm = self.X_centered * self.stddev_inv
+        # Normalize the input        
+        self.X_centered = tf.subtract(x, layer_mean)
+        self.stddev_inv = tf.math.rsqrt(layer_var + self.epsilon)
+        self.X_norm = tf.multiply(self.X_centered, self.stddev_inv)
         
         # Scale and shift
-        return self.gamma * self.X_norm + self.beta
+        return tf.add(tf.multiply(self.gamma, self.X_norm), self.beta)
     
     
-    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+    def backward(self, grad_output: tf.Tensor) -> tf.Tensor:
         """
         Backward pass of the layer normalization layer (layer i)
         
         Parameters:
-        - grad_output (np.ndarray): The gradient of the loss with respect to the output of the layer: dL/dO_i
+        - grad_output (tf.Tensor): The gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        - tf.Tensor: The gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         
         Raises:
         - AssertionError: If the gamma and beta parameters are not initialized or the optimizer is not set.
@@ -373,27 +382,43 @@ class LayerNormalization(Layer):
         
         # Assert that the gamma and beta parameters are initialized and the optimizer is set
         assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
-        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
-        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.gamma, tf.Tensor), "Gamma parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.beta, tf.Tensor), "Beta parameter is not initialized. Please call the layer with input data."
         
         # Extract the shape of the input
         batch_size = grad_output.shape[0]
         
         # Gradients of beta and gamma
-        d_beta = grad_output.sum(axis=tuple(range(grad_output.ndim - 1)), keepdims=True)
-        d_gamma = np.sum(grad_output * self.X_norm, axis=tuple(range(grad_output.ndim - 1)), keepdims=True)
+        d_beta = tf.reduce_sum(grad_output, axis=tuple(range(len(grad_output.shape) - 1)), keepdims=True)
+        d_gamma = tf.reduce_sum(tf.multiply(grad_output, self.X_norm), axis=tuple(range(len(grad_output.shape) - 1)), keepdims=True)
         
         # Gradient with respect to the normalized input
-        dx_hat = grad_output * self.gamma
+        dx_hat = tf.multiply(grad_output, self.gamma)
         
         # Gradient with respect to variance
-        d_var = np.sum(dx_hat * self.X_centered, axis=tuple(range(1, grad_output.ndim)), keepdims=True) * -0.5 * self.stddev_inv**3
+        d_var = tf.multiply(tf.reduce_sum(tf.multiply(dx_hat, self.X_centered), axis=tuple(range(1, len(grad_output.shape)))), -0.5, tf.pow(self.stddev_inv, 3))
         
         # Gradient with respect to mean
-        d_mean = np.sum(dx_hat * -self.stddev_inv, axis=tuple(range(1, grad_output.ndim)), keepdims=True) + d_var * np.mean(-2. * self.X_centered, axis=tuple(range(1, grad_output.ndim)), keepdims=True)
-
+        d_mean = tf.add(
+            tf.reduce_sum(tf.multiply(dx_hat, tf.negative(self.stddev_inv)), axis=tuple(range(1, len(grad_output.shape))), keepdims=True),
+            tf.multiply(d_var, tf.reduce_mean(tf.multiply(-2, self.X_centered), axis=tuple(range(1, len(grad_output.shape))), keepdims=True))
+        )
+        
         # Gradient with respect to input x
-        dx = (dx_hat * self.stddev_inv) + (d_var * 2 * self.X_centered / batch_size) + (d_mean / batch_size) # dL/dX_i ≡ dL/dO_{i-1}
+        dx = tf.add(
+            tf.multiply(dx_hat, self.stddev_inv),
+            tf.divide(
+                tf.multiply(
+                    tf.multiply(2, d_var),
+                    self.X_centered
+                ),
+                batch_size
+            ),
+            tf.divide(
+                d_mean,
+                batch_size
+            )
+        )
         
         # Update the gamma parameter
         self.gamma = self.optimizer.update(
@@ -427,41 +452,41 @@ class LayerNormalization(Layer):
         """
         
         # Assert that the gamma and beta parameters are initialized
-        assert self.gamma is not None, "Gamma parameter is not initialized. Please call the layer with input data."
-        assert self.beta is not None, "Beta parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.gamma, tf.Tensor), "Gamma parameter is not initialized. Please call the layer with input data."
+        assert isinstance(self.beta, tf.Tensor), "Beta parameter is not initialized. Please call the layer with input data."
         
         # Return the number of parameters in the layer
-        return self.gamma.size + self.beta.size
+        return int(tf.add(tf.size(self.gamma), tf.size(self.beta)))
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Method to return the output shape of the layer
         
         Returns:
-        - tuple: The shape of the output of the layer
+        - tf.TensorShape: The shape of the output of the layer
         """
         
         return self.input_shape
 
     
-    def init_params(self) -> None:
+    def init_params(self, x: tf.Tensor) -> None:
         """
         Method to initialize the parameters of the layer
         
-        Raises:
-        - AssertionError: If the input shape is not set
+        Parameters:
+        - x (tf.Tensor): Input data
         """
-        
-        # Assert that the input shape is set
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with input data."
+                 
+        # Store the input dimension
+        self.input_shape = x.shape
         
         # Extract the shape of the parameters: all except the batch dimension
         feature_shape = self.input_shape[1:]
         
         # Initialize the scale and shift parameters
-        self.gamma = np.ones(feature_shape)
-        self.beta = np.zeros(feature_shape)
+        self.gamma = tf.ones(feature_shape)
+        self.beta = tf.zeros(feature_shape)
         
         # Update the initialization flag
         self.initialized = True

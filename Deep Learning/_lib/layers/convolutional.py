@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from typing import Literal, Optional
 
 from .base import Layer
@@ -53,16 +54,16 @@ class Conv2D(Layer):
         self.input_shape = None
     
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Function to compute the forward pass of the Conv2D layer.
         It initializes the filters if not initialized and computes the forward pass.
         
         Parameters:
-        - x (np.ndarray): input data. Shape: (Batch size, Height, Width, Channels)
+        - x (tf.Tensor): input data. Shape: (Batch size, Height, Width, Channels)
         
         Returns:
-        - np.ndarray: output data. Shape: (Batch size, Height, Width, Number of filters)
+        - tf.Tensor: output data. Shape: (Batch size, Height, Width, Number of filters)
         
         Raises:
         - ValueError: if the input shape is not a tuple of 4 integers
@@ -72,16 +73,10 @@ class Conv2D(Layer):
         if len(x.shape) != 4:
             raise ValueError(f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape}")
         
-        # Extract the dimensions of the input data
-        batch_size, input_height, input_width, num_channels = x.shape
-        
-        # Save the input shape
-        self.input_shape = (batch_size, input_height, input_width, num_channels)
-        
         # Checking if the layer is initialized
         if not self.initialized:
             # Initialize the filters
-            self.init_params(num_channels)
+            self.init_params(x)
             
         # Compute the forward pass
         return self.forward(x)
@@ -98,95 +93,58 @@ class Conv2D(Layer):
         """
         
         return {
-            "filters": self.filters
+            "filters": self.filters,
+            "bias": self.bias
         }
     
         
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Function to compute the forward pass of the Conv2D layer.
         
         Parameters:
-        - x (np.ndarray): input data. Shape: (Batch size, Height, Width, Channels)
+        - x (tf.Tensor): input data. Shape: (Batch size, Height, Width, Channels)
         
         Returns:
-        - np.ndarray: output data. Shape: (Batch size, Height, Width, Number of filters)
+        - tf.Tensor: output data. Shape: (Batch size, Height, Width, Number of filters)
         
         Raises:
         - AssertionError: if the filters are not initialized
         """
         
-        # Assert that the filters are initialized
-        assert self.filters is not None, "Filters are not initialized. Please call the layer with some input data to initialize the filters."
-        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
+        assert isinstance(self.filters, tf.Tensor), "Filters are not initialized. Please call the layer with some input data to initialize the filters."
+        assert isinstance(self.bias, tf.Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Extract the required dimensions for a better interpretation
-        _, output_height, output_width, num_filters = self.output_shape() # Shape of the output data
-        kernel_height, kernel_width = self.kernel_size # Shape of the kernel
         stride_height, stride_width = self.stride # Stride of the kernel
         
-        # Apply padding to the input data
-        if self.padding == "same":
-            # Pad the input data
-            x = np.pad(
-                x,
-                (
-                    (0, 0),
-                    (self.padding_top, self.padding_bottom),
-                    (self.padding_left, self.padding_right),
-                    (0, 0)
-                ),
-                mode="constant"
-            )
-        
-        # Save the input data
+        # Save the input for the backward pass
         self.x = x
+
+        # Apply the convolution operation
+        self.features_map = tf.nn.conv2d(
+            input = x,
+            filters = tf.transpose(self.filters, perm=[1, 2, 3, 0]),
+            strides = [1, stride_height, stride_width, 1],
+            padding = self.padding.upper()
+        ) # Shape: (Batch size, Height, Width, Number of filters)
         
-        # Extract the dimensions of the input data
-        batch_size, input_height, input_width, _ = x.shape # Shape of the input data
+        # Add the bias
+        self.features_map = tf.add(self.features_map, self.bias) # Shape: (Batch size, Height, Width, Number of filters)
         
-        # Initialize the output data
-        output = np.zeros((batch_size, output_height, output_width, num_filters))
-        
-        # Iterate over the height of the input data, the step size is the stride along the height
-        for i in range(output_height):
-            # Extract the indices for the current window along the height
-            h_start = i * stride_height
-            h_end = h_start + kernel_height
-            
-            # Iterate over the width of the input data, the step size is the stride along the width
-            for j in range(output_width):
-                # Extract the indices for the current window along the width
-                w_start = j * stride_width
-                w_end = w_start + kernel_width
-                
-                # Extract the windows of the input data
-                window = x[:, h_start:h_end, w_start:w_end, :]
-                
-                # Iterate over the filters
-                for k in range(num_filters):
-                    # Compute the convolution
-                    output[:, i, j, k] = np.sum(window * self.filters[k], axis=(1, 2, 3)) + self.bias[k]
-                
-        # Save the feature maps for backpropagation
-        self.feature_maps = output        
-            
         # Apply the activation function
-        if self.activation is not None:
-            output = self.activation(self.feature_maps)
-        
-        return output
+        return self.features_map if self.activation is None else self.activation(self.features_map)
     
     
-    def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
+    def backward(self, loss_gradient: tf.Tensor) -> tf.Tensor:
         """
         Backward pass of the layer (layer i)
         
         Parameters:
-        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of the layer: dL/dO_i
+        - loss_gradient (tf.Tensor): Gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        - tf.Tensor: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
         
         Raises:
         - AssertionError: If the weights and bias are not initialized
@@ -194,64 +152,61 @@ class Conv2D(Layer):
         
         # Assert that filters and bias are initialized
         assert isinstance(self.optimizer, Optimizer), "Optimizer is not set. Please set an optimizer before training the model."
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
-        assert self.filters is not None, "Filters are not initialized."
-        assert self.bias is not None, "Bias is not initialized."
+        assert isinstance(self.input_shape, tf.TensorShape), "Input shape is not set. Please call the layer with some input data to set the input shape."
+        assert isinstance(self.filters, tf.Tensor), "Filters are not initialized."
+        assert isinstance(self.bias, tf.Tensor), "Bias is not initialized."
         
+        # Apply the activation derivative if an activation function is set
         if self.activation is not None:
             # Multiply the incoming gradient by the activation derivative
-            gradient = loss_gradient * self.activation.derivative(self.feature_maps) # dL/dO_i * dO_i/dX_i, where dO_i/dX_i is the activation derivative
-        else:
-            # If the activation function is not defined, the gradient is the same as the incoming gradient
-            gradient = loss_gradient # dL/dO_i
+            loss_gradient = tf.multiply(loss_gradient, tf.cast(self.activation.derivative(self.features_map), dtype=loss_gradient.dtype)) # dL/dO_i * dO_i/dX_i, where dO_i/dX_i is the activation derivative
         
         # Extract dimensions
-        batch_size, input_height, input_width, num_channels = self.x.shape
-        _, output_height, output_width, num_filters = gradient.shape
+        _, _, _, num_channels = self.input_shape
+        _, _, _, num_filters = loss_gradient.shape
         kernel_height, kernel_width = self.kernel_size
         stride_height, stride_width = self.stride
         
-        # Initialize gradients
-        grad_filters = np.zeros_like(self.filters)
-        grad_bias = np.zeros_like(self.bias)
-        grad_input = np.zeros((batch_size, input_height, input_width, num_channels))
+        # Assert that the number of channels is an integer
+        assert isinstance(num_channels, int), "Number of channels is not an integer."
         
         # Compute gradients with respect to the bias
-        grad_bias = np.sum(gradient, axis=(0, 1, 2)) # dL/db_i
+        grad_bias = tf.reduce_sum(loss_gradient, axis=(0, 1, 2)) # dL/db_i
             
-        # Iterate over the height of the output
-        for i in range(output_height):
-            # Extract the indices of the input region along the height
-            h_start = i * stride_height
-            h_end = h_start + kernel_height
-            
-            # Iterate over the width of the output
-            for j in range(output_width):
-                # Extract the indices of the input region along the width
-                w_start = j * stride_width
-                w_end = w_start + kernel_width
-                
-                # Define the region of the input that corresponds to the current output position
-                input_region = self.x[:, h_start:h_end, w_start:w_end, :]
-    
-                # Iterate over the filters
-                for k in range(num_filters):
-                    # Gradient with respect to the filter
-                    grad_filters[k] += np.sum(
-                        input_region * gradient[:, i:i+1, j:j+1, k:k+1],
-                        axis=0
-                    )
-                    # Gradient with respect to the input
-                    grad_input[:, h_start:h_end, w_start:w_end, :] += (
-                        self.filters[k] * gradient[:, i:i+1, j:j+1, k:k+1]
-                    )
+        # Extract patches for all pooling regions in one step
+        patches = tf.image.extract_patches(
+            images = self.x,
+            sizes = [1, kernel_height, kernel_width, 1],
+            strides = [1, stride_height, stride_width, 1],
+            rates = [1, 1, 1, 1],
+            padding = self.padding.upper()
+        ) # Shape: (batch_size, output_height, output_width, kernel_height * kernel_width * num_channels)
+        
+        # Reshape patches to isolate each channel and pooling window
+        patches_reshaped = tf.reshape(patches, [-1, kernel_height * kernel_width * num_channels]) # Shape: (batch_size * output_height * output_width, kernel_height * kernel_width * num_channels)
+        
+        # Reshape the loss gradient to compute the gradient with respect to the filters
+        loss_gradient_reshaped = tf.reshape(loss_gradient, [-1, num_filters]) # Shape: (batch_size * output_height * output_width, num_channels)
+        
+        # Compute the gradient with respect to the filters
+        grad_filters = tf.matmul(patches_reshaped, loss_gradient_reshaped, transpose_a=True) # Shape: (kernel_height * kernel_width * num_channels, num_filters)
+        grad_filters = tf.reshape(grad_filters, [kernel_height, kernel_width, num_channels, num_filters]) # Shape: (kernel_height, kernel_width, num_channels, num_filters)
+        
+        # Apply the convolution transpose operation to compute the gradient with respect to the input
+        grad_input = tf.nn.conv2d_transpose(
+            input = loss_gradient,
+            filters = tf.transpose(self.filters, perm=[1, 2, 3, 0]),
+            output_shape = self.input_shape,
+            strides = [1, stride_height, stride_width, 1],
+            padding = self.padding.upper()
+        )
     
         # Update the filters
         self.filters = self.optimizer.update(
             layer = self,
             param_name = "filters",
             params = self.filters,
-            grad_params = grad_filters
+            grad_params = tf.transpose(grad_filters, perm=[3, 0, 1, 2])
         )
         
         # Update bias
@@ -262,31 +217,22 @@ class Conv2D(Layer):
             grad_params = grad_bias
         )
         
-        # Remove padding if applied during the forward pass
-        if self.padding == "same":
-            grad_input = grad_input[
-                :,
-                self.padding_top:-self.padding_bottom if self.padding_bottom != 0 else None,
-                self.padding_left:-self.padding_right if self.padding_right != 0 else None,
-                :
-            ]
-        
         return grad_input # dL/dX_i ≡ dL/dO_{i-1}
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Function to compute the output shape of the Conv2D layer.
         
         Returns:
-        - tuple: shape of the output data
+        - tf.TensorShape: output shape of the Conv2D layer
         
         Raises:
         - AssertionError: if the input shape is not set
         """
         
         # Assert that the input shape is set
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        assert isinstance(self.input_shape, tf.TensorShape), "Input shape is not set. Please call the layer with some input data to set the input shape."
         
         # Extract the dimensions
         batch_size, input_height, input_width, _ = self.input_shape
@@ -295,36 +241,23 @@ class Conv2D(Layer):
         
         # Padding is applied to the input data
         if self.padding == 'same':
-            # Compute the output shape of the Conv2D layer
-            output_height = int(np.ceil(float(input_height) / float(stride_height)))
-            output_width = int(np.ceil(float(input_width) / float(stride_width)))
-            
-            # Compute the padding values along the height and width
-            pad_along_height = max((output_height - 1) * stride_height + kernel_height - input_height, 0)
-            pad_along_width = max((output_width - 1) * stride_width + kernel_width - input_width, 0)
-            
-            # Compute the padding values
-            self.padding_top = pad_along_height // 2
-            self.padding_bottom = pad_along_height - self.padding_top
-            self.padding_left = pad_along_width // 2
-            self.padding_right = pad_along_width - self.padding_left
+            # Compute the output shape of the Conv2D layer            
+            output_height = tf.math.ceil(tf.divide(input_height, stride_height))
+            output_width = tf.math.ceil(tf.divide(input_width, stride_width))
             
         # No padding is applied to the input data
         else:
             # Compute the output shape of the Conv2D layer
-            output_height = int(np.floor((input_height - kernel_height) / stride_height) + 1)
-            output_width = int(np.floor((input_width - kernel_width) / stride_width) + 1)
-            
-            # Set the padding values to 0
-            self.padding_top = self.padding_bottom = self.padding_left = self.padding_right = 0
+            output_height = tf.floor(tf.add(tf.divide(tf.subtract(input_height, kernel_height), stride_height), 1))
+            output_width = tf.floor(tf.add(tf.divide(tf.subtract(input_width, kernel_width), stride_width), 1))
         
         # Compute the output shape of the Conv2D layer
-        return (
+        return tf.TensorShape((
             batch_size, # Batch size
-            output_height, # Output height
-            output_width,  # Output width
+            tf.cast(output_height, dtype=tf.int32), # Output height
+            tf.cast(output_width, dtype=tf.int32),  # Output width
             self.num_filters # Number of filters
-        )
+        ))
     
     
     def count_params(self) -> int:
@@ -339,26 +272,32 @@ class Conv2D(Layer):
         """
         
         # Assert that the filters are initialized
-        assert self.filters is not None, "Filters are not initialized. Please call the layer with some input data to initialize the filters."
-        assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
+        assert isinstance(self.filters, tf.Tensor), "Filters are not initialized. Please call the layer with some input data to initialize the filters."
+        assert isinstance(self.bias, tf.Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
-        return int(np.prod(self.filters.shape)) + int(np.prod(self.bias.shape)) # num_filters * kernel_size[0] * kernel_size[1] * num_channels + num_filters
+        return int(tf.add(np.size(self.filters), np.size(self.bias))) # num_filters * kernel_size[0] * kernel_size[1] * num_channels + num_filters
     
     
-    def init_params(self, num_channels: int) -> None:
+    def init_params(self, x: tf.Tensor) -> None:
         """
         Function to initialize the filters of the Conv2D layer.
         
         Parameters:
-        - num_channels (int): number of channels in the input data
+        - x (tf.Tensor): input data. Shape: (Batch size, Height, Width, Channels)
         """
+        
+        # Save the input shape
+        self.input_shape = x.shape
+        
+        # Extract the dimensions of the input data
+        _, _, _, num_channels = x.shape
         
         # Extract the dimensions of the kernel
         kernel_height, kernel_width = self.kernel_size
         
         # Initializing the filters and bias with random values and normalizing them
-        self.filters = np.random.randn(self.num_filters, kernel_height, kernel_width, num_channels) / (kernel_height * kernel_width)
-        self.bias = np.zeros(self.num_filters)
+        self.filters = tf.cast(tf.divide(tf.random.uniform((self.num_filters, kernel_height, kernel_width, num_channels)), (kernel_height * kernel_width)), dtype=x.dtype) # Shape: (num_filters, kernel_height, kernel_width, num_channels)
+        self.bias = tf.cast(tf.zeros(self.num_filters), dtype=x.dtype)
         
         # Update the initialization flag
         self.initialized = True

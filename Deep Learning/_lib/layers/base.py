@@ -1,4 +1,4 @@
-import numpy as np
+import tensorflow as tf
 from functools import wraps
 from typing import Optional, Callable
 
@@ -20,15 +20,15 @@ class Layer:
         self.optimizer: Optional[Optimizer] = None # Instance of the optimizer to be used for updating the parameters
     
     
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Abstract method to set the input shape of the layer.
         
         Parameters:
-        - x (np.ndarray): Input data
+        - x (tf.Tensor): Input data
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - tf.Tensor: Output of the layer after the forward pass
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -92,16 +92,16 @@ class Layer:
 
     
     @check_initialization
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Abstract method to compute the output of the layer. 
         The implementation should be done in the child classes
         
         Parameters:
-        - x (np.ndarray): Features of the dataset
+        - x (tf.Tensor): Features of the dataset
         
         Returns:
-        - np.ndarray: Output of the layer
+        - tf.Tensor: Output of the layer
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -112,16 +112,16 @@ class Layer:
     
     
     @check_initialization
-    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+    def backward(self, grad_output: tf.Tensor) -> tf.Tensor:
         """
         Abstract method to compute the gradient of the loss with respect to the input of the layer. 
         The implementation should be done in the child classes
         
         Parameters:
-        - grad_output (np.ndarray): Gradient of the loss with respect to the output of the layer
+        - grad_output (tf.Tensor): Gradient of the loss with respect to the output of the layer
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the layer
+        - tf.Tensor: Gradient of the loss with respect to the input of the layer
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -131,13 +131,13 @@ class Layer:
 
     
     @check_initialization
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Abstract method to return the output shape of the layer. 
         The implementation should be done in the child classes
         
         Returns:
-        - tuple: The shape of the output of the layer
+        - tf.TensorShape: Shape of the output data
         
         Raises:
         - NotImplementedError: If the method is not implemented

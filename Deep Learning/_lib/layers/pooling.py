@@ -1,9 +1,9 @@
-import numpy as np
+import tensorflow as tf
 from typing import Optional, Literal
 
 from .base import Layer
 
-
+        
 class MaxPool2D(Layer):
     
     ### Magic methods ###
@@ -27,30 +27,24 @@ class MaxPool2D(Layer):
         self.padding = padding
         
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to perform the forward pass through the MaxPool2D layer
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, height, width, channels)
+        - x (tf.Tensor): Input data. Shape: (Batch size, height, width, channels)
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - tf.Tensor: Output of the layer after the forward pass
         """
         
         # Check if the input shape has a valid shape
         if len(x.shape) != 4:
-            raise ValueError(f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape}")
-        
-        # Extract the dimensions of the input data
-        batch_size, input_height, input_width, num_channels = x.shape
-        
-        # Save the input shape
-        self.input_shape = (batch_size, input_height, input_width, num_channels)
+            raise ValueError(f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {(len(x.shape))}")
         
         # Initialize the layer params
         if not self.initialized:
-            self.init_params()
+            self.init_params(x)
         
         # Perform the forward pass
         return self.forward(x)
@@ -58,127 +52,130 @@ class MaxPool2D(Layer):
         
     ### Public methods ###
     
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Method to perform the forward pass through the MaxPool2D layer
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, height, width, channels)
+        - x (tf.Tensor): Input data. Shape: (Batch size, height, width, channels)
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - tf.Tensor: Output of the layer after the forward pass
         """
+
+        # Apply max pooling
+        output, self.arg_max = tf.nn.max_pool_with_argmax(
+            input = x,
+            ksize = [1, *self.size, 1],
+            strides = [1, *self.stride, 1],
+            padding = self.padding.upper()
+        )
         
-        # Extract the required dimensions for better readability
-        batch_size, output_height, output_width, n_channels = self.output_shape()
-        pool_height, pool_width = self.size
-        stride_height, stride_width = self.stride
-        
-        # Apply the padding
-        if self.padding == "same":            
-            # Calcola padding per l'altezza
-            top_padding = int(np.floor(self.padding_height / 2))
-            bottom_padding = int(np.ceil(self.padding_height / 2))
-            
-            # Calcola padding per la larghezza
-            left_padding = int(np.floor(self.padding_width / 2))
-            right_padding = int(np.ceil(self.padding_width / 2))
-            
-            # Pad the input data
-            x = np.pad(x, ((0, 0), (top_padding, bottom_padding), (left_padding, right_padding), (0, 0)), mode="constant")
-            
-        # Cache for max positions
-        self.cache = np.zeros_like(x, dtype=bool) 
-        
-        # Initialize the output
-        output = np.zeros((batch_size, output_height, output_width, n_channels))
-        
-        # Iterate over the input data
-        for i in range(output_height):
-            # Iterate over the width
-            for j in range(output_width):
-                # Extract the current pooling region
-                x_slice = x[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :]
-                
-                # Compute the max value and the mask
-                max_mask = (x_slice == np.max(x_slice, axis=(1, 2), keepdims=True))
-                output[:, i, j, :] = np.max(x_slice, axis=(1, 2))
-                
-                # Save the mask in the cache
-                self.cache[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :] |= max_mask
-                
         return output
     
     
-    def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
+    def backward(self, loss_gradient: tf.Tensor) -> tf.Tensor:
         """
         Backward pass for the MaxPool2D layer (Layer i)
         
         Parameters:
-        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of this layer: dL/dO_i
+        - loss_gradient (tf.Tensor): Gradient of the loss with respect to the output of this layer: dL/dO_i
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of this layer: dL/dX_i ≡ dL/dO_{i-1}
+        - tf.Tensor: Gradient of the loss with respect to the input of this layer: dL/dX_i ≡ dL/dO_{i-1}
         """
         
-        # Extract the required dimensions for better readability
-        batch_size, output_height, output_width, n_channels = loss_gradient.shape
-        pool_height, pool_width = self.size
-        stride_height, stride_width = self.stride
+        # Extract shapes
+        batch_size, input_height, input_width, n_channels = self.input_shape
         
-        # Initialize the gradient of the input with zeros
-        d_input = np.zeros(self.input_shape)
+        # Asserting the types of the input arguments
+        assert isinstance(batch_size, int)
+        assert isinstance(input_height, int)
+        assert isinstance(input_width, int)
+        assert isinstance(n_channels, int)
         
-        # Iterate over the height dimension
-        for i in range(output_height):
-            # Iterate over the width dimension
-            for j in range(output_width):
-                # Create a slice of the cached mask for the current pooling region
-                mask_slice = self.cache[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :]
-                
-                # Distribute the gradient only to the positions that were the max in the forward pass
-                d_input[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :] += mask_slice * loss_gradient[:, i, j, :][:, np.newaxis, np.newaxis, :]
-           
-        return d_input # dL/dX_i ≡ dL/dO_{i-1}
+        # Total number of elements per input sample
+        total_number = input_height * input_width * n_channels
         
+        # Flatten arg_max and loss_gradient
+        arg_max_flat = tf.reshape(self.arg_max, [-1])
+        loss_gradient_flat = tf.reshape(loss_gradient, [-1])
         
-    def output_shape(self) -> tuple:
+        # Compute batch offsets to adjust indices
+        batch_offset = tf.range(batch_size, dtype=arg_max_flat.dtype) * total_number
+        batch_offset = tf.reshape(batch_offset, [-1, 1, 1, 1])
+        batch_offset = tf.broadcast_to(batch_offset, tf.shape(self.arg_max))
+        batch_offset_flat = tf.reshape(batch_offset, [-1])
+        
+        # Adjust arg_max indices to account for batch offset
+        arg_max_flat_adjusted = arg_max_flat + batch_offset_flat
+        
+        # Total number of elements in all batches
+        total_elements = batch_size * total_number
+        
+        # Scatter the gradients back to the input tensor
+        d_input_flat = tf.scatter_nd(
+            indices = tf.expand_dims(arg_max_flat_adjusted, 1),
+            updates = loss_gradient_flat,
+            shape = [total_elements]
+        )
+        
+        # Reshape back to input shape
+        d_input = tf.reshape(d_input_flat, [batch_size, input_height, input_width, n_channels])
+
+        return d_input
+
+        
+    def output_shape(self) -> tf.TensorShape:
         """
         Function to compute the output shape of the layer.
         
         Returns:
-        - tuple: shape of the output data
+        - tf.TensorShape: Shape of the output data
         
         Raises:
-        - AssertionError: if the input shape is not set
+        - AssertionError: if the input shape is not set or if the input shape is not an integer
         """
         
         # Assert that the input shape is set
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        assert isinstance(self.input_shape, tf.TensorShape), "Input shape is not set. Please call the layer with some input data to set the input shape."
         
         # Extract the dimensions
         batch_size, input_height, input_width, n_channels = self.input_shape
         pool_width, pool_height = self.size
         stride_height, stride_width = self.stride
         
-        # Compute the output shape
+        assert isinstance(input_height, int), "Input height must be an integer."
+        assert isinstance(input_width, int), "Input width must be an integer."
         
-        if self.padding == "same":
-            # Compute the padding
-            self.padding_height = (np.ceil((input_height - pool_height) / stride_height) * stride_height + pool_height - input_height) / 2
-            self.padding_width = (np.ceil((input_width - pool_width) / stride_width) * stride_width + pool_width - input_width) / 2
-            
-            # Compute the output shape with padding
-            output_height = int(((input_width - pool_height + 2 * self.padding_height) / stride_height) + 1)
-            output_width = int(((input_width - pool_width + 2 * self.padding_width) / stride_width) + 1)
+        if self.padding.lower() == 'same':
+            # Compute the output dimensions when padding is applied
+            output_height = (input_height + stride_height - 1) // stride_height
+            output_width = (input_width + stride_width - 1) // stride_width
         else:
-            # Compute the output shape without padding
+            # Compute the output dimensions when padding is not applied
             output_height = (input_height - pool_height) // stride_height + 1
             output_width = (input_width - pool_width) // stride_width + 1
-    
-        return (
+        
+        # Return the output shape
+        return tf.TensorShape((
             batch_size, # Batch size
             output_height, # Height
             output_width, # Width
             n_channels # Number of channels
-        )
+        ))
+        
+        
+    def init_params(self, x: tf.Tensor) -> None:
+        """
+        Method to initialize the parameters of the layer
+        
+        Parameters:
+        - x (tf.Tensor): Input data
+        """
+        
+        # Save the input shape
+        self.input_shape = x.shape
+        
+        # Set the layer as initialized
+        self.initialized = True

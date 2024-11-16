@@ -1,91 +1,93 @@
 import numpy as np
+import tensorflow as tf
 
 
-def mean_absolute_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def mean_absolute_error(y_true: tf.Tensor, y_pred: tf.Tensor) -> float:
     """
     Compute the mean absolute error of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (tf.Tensor): True target variable
+    - y_pred (tf.Tensor): Predicted target variable
 
     Returns:
     - float: Mean absolute error of the model
     """
     
     # Compute the mean absolute error
-    return float(np.mean(np.abs(y_true - y_pred)))
+    return float(tf.reduce_mean(tf.abs(tf.subtract(y_true, y_pred))))
 
 
-def accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def accuracy(y_true: tf.Tensor, y_pred: tf.Tensor) -> float:
     """
     Compute the accuracy of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (tf.Tensor): True target variable
+    - y_pred (tf.Tensor): Predicted target variable
 
     Returns:
-    - float: Accuracy value
+    - float: Accuracy of the model
     """
     
-    # If the array is multi-dimensional, take the argmax
-    if y_true.ndim > 1:
-        y_true = np.argmax(y_true, axis=-1)
-    if y_pred.ndim > 1:
-        y_pred = np.argmax(y_pred, axis=-1)
+    # If the rank of the input tensors is greater than 1, take the argmax
+    if len(y_true.shape) > 1:
+        y_true = tf.argmax(y_true, axis=-1)
+        
+    if len(y_pred.shape) > 1:
+        y_pred = tf.argmax(y_pred, axis=-1)
     
     # Compute the accuracy
-    return np.mean(y_true == y_pred, axis=-1)
+    return float(tf.reduce_mean(tf.cast(tf.equal(y_true, y_pred), tf.float32), axis=-1))
+    
 
-
-def precision(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def precision(y_true: tf.Tensor, y_pred: tf.Tensor) -> float:
     """
     Compute the precision of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (tf.Tensor): True target variable
+    - y_pred (tf.Tensor): Predicted target variable
 
     Returns:
     - float: Precision of the model
     """
     
-    # Compute the precision
-    tp = np.sum((y_true == 1) & (y_pred == 1))
-    fp = np.sum((y_true == 0) & (y_pred == 1))
+    # Compute the true positives and false positives
+    tp = tf.reduce_sum(tf.cast(tf.logical_and(tf.equal(y_true, 1), tf.equal(y_pred, 1)), tf.float32))
+    fp = tf.reduce_sum(tf.cast(tf.logical_and(tf.equal(y_true, 0), tf.equal(y_pred, 1)), tf.float32))
     
     # Return the precision
-    return tp / (tp + fp)
+    return float(tf.divide(tp, tf.add(tp, fp)))
 
 
-def recall(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def recall(y_true: tf.Tensor, y_pred: tf.Tensor) -> float:
     """
     Compute the recall of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (tf.Tensor): True target variable
+    - y_pred (tf.Tensor): Predicted target variable
 
     Returns:
     - float: Recall of the model
     """
     
-    # Compute the recall
-    tp = np.sum((y_true == 1) & (y_pred == 1))
-    fn = np.sum((y_true == 1) & (y_pred == 0))
+    # Compute the true positive and false negative
+    tp = tf.reduce_sum(tf.cast(tf.logical_and(tf.equal(y_true, 1), tf.equal(y_pred, 1)), tf.float32))
+    fn = tf.reduce_sum(tf.cast(tf.logical_and(tf.equal(y_true, 1), tf.equal(y_pred, 0)), tf.float32))
     
     # Return the recall
-    return tp / (tp + fn)
+    return float(tf.divide(tp, tf.add(tp, fn)))
 
 
-def f1_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def f1_score(y_true: tf.Tensor, y_pred: tf.Tensor) -> float:
     """
     Compute the F1 score of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (tf.Tensor): True target variable
+    - y_pred (tf.Tensor): Predicted target variable
 
     Returns:
     - float: F1 score of the model
@@ -99,32 +101,25 @@ def f1_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return 2 * (prec * rec) / (prec + rec)
 
 
-def confusion_matrix(num_classes: int, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+def confusion_matrix(num_classes: int, y_true: tf.Tensor, y_pred: tf.Tensor) -> np.ndarray:
     """
     Compute the confusion matrix of the model.
 
     Parameters:
     - num_classes (int): Number of classes
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (tf.Tensor): True target variable
+    - y_pred (tf.Tensor): Predicted target variable
 
     Returns:
-    - np.ndarray: Confusion matrix
+    - np.ndarray: Confusion matrix of the model
     """
     
-    # Arrays must be 1D
-    if y_true.ndim > 1:
-        y_true = np.argmax(y_true, axis=-1)
+    # If the rank of the input tensors is greater than 1, take the argmax
+    if len(y_true.shape) > 1:
+        y_true = tf.argmax(y_true, axis=-1)
         
-    if y_pred.ndim > 1:
-        y_pred = np.argmax(y_pred, axis=-1)
+    if len(y_pred.shape) > 1:
+        y_pred = tf.argmax(y_pred, axis=-1)
     
     # Compute the confusion matrix
-    confusion_matrix = np.zeros((num_classes, num_classes))
-    
-    # Fill the confusion matrix
-    for i in range(len(y_true)):
-        # Increment the confusion matrix
-        confusion_matrix[y_true[i], y_pred[i]] += 1
-        
-    return confusion_matrix
+    return tf.math.confusion_matrix(y_true, y_pred, num_classes=num_classes)

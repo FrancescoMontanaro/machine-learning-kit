@@ -1,20 +1,20 @@
-import numpy as np
+import tensorflow as tf
 
 
 class LossFn:
     
     ### Magic methods ###
 
-    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """
         Compute the loss.
 
         Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
+        - y_true (tf.Tensor): True target variable
+        - y_pred (tf.Tensor): Predicted target variable
 
         Returns:
-        - float: Loss value
+        - tf.Tensor: Loss value
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -26,16 +26,16 @@ class LossFn:
 
     ### Public methods ###
 
-    def gradient(self, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+    def gradient(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """
         Compute the gradient of the loss with respect to y_pred.
 
         Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
+        - y_true (tf.Tensor): True target variable
+        - y_pred (tf.Tensor): Predicted target variable
 
         Returns:
-        - np.ndarray: Gradient of the loss with respect to y_pred
+        - tf.Tensor: Gradient of the loss with respect to y_pred
         
         Raises:
         - NotImplementedError: If the method is not implemented

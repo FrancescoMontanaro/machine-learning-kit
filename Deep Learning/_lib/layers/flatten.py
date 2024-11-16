@@ -1,4 +1,4 @@
-import numpy as np
+import tensorflow as tf
 from typing import Optional
 
 from .base import Layer
@@ -23,23 +23,23 @@ class Flatten(Layer):
         self.input_shape = None
         
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Forward pass through the Flatten layer
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, ...)
+        - x (tf.Tensor): Input data. Shape: (Batch size, ...)
         
         Returns:
-        - np.ndarray: Flattened input data
+        - tf.Tensor: Flattened input data
         """
         
-        # Save the input shape
+        # Store the input shape
         self.input_shape = x.shape
         
         # Initialize the layer params
         if not self.initialized:
-            self.init_params()
+            self.init_params(x)
         
         # Perform the forward pass
         return self.forward(x)
@@ -47,46 +47,46 @@ class Flatten(Layer):
         
     ### Public methods ###
     
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Forward pass through the Flatten layer
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, ...)
+        - x (tf.Tensor): Input data. Shape: (Batch size, ...)
         
         Returns:
-        - np.ndarray: Flattened input data
+        - tf.Tensor: Flattened input data
         """
     
         # Extract the output dimensions
-        batch_size, num_features = self.output_shape()
+        output_shape = self.output_shape() # (batch_size, num_features)
         
         # Flatten the input data
-        return x.reshape(batch_size, num_features)
+        return tf.reshape(x, output_shape)
     
     
-    def backward(self, grad: np.ndarray) -> np.ndarray:
+    def backward(self, grad: tf.Tensor) -> tf.Tensor:
         """
         Backward pass through the Flatten layer
         
         Parameters:
-        - grad (np.ndarray): Gradient of the loss with respect to the output of the Flatten layer
+        - grad (tf.Tensor): Gradient of the loss with respect to the output of the Flatten layer
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the Flatten layer
+        - tf.Tensor: Gradient of the loss with respect to the input of the Flatten layer
         
         Raises:
         - AssertionError: if the input shape is not set
         """
         
         # Assert that the input shape is set
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        assert isinstance(self.input_shape, tf.TensorShape), "Input shape is not set. Please call the layer with some input data to set the input shape."
         
         # Reshape the gradient
-        return grad.reshape(self.input_shape)
+        return tf.reshape(grad, self.input_shape)
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> tf.TensorShape:
         """
         Function to compute the output shape of the layer.
         
@@ -98,11 +98,23 @@ class Flatten(Layer):
         """
         
         # Assert that the input shape is set
-        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        assert isinstance(self.input_shape, tf.TensorShape), "Input shape is not set. Please call the layer with some input data to set the input shape."
         
         # Extract the dimensions
         batch_size = self.input_shape[0]
-        num_features = np.prod(self.input_shape[1:])
+        num_features = tf.reduce_prod(self.input_shape[1:])
         
         # Compute the output shape
-        return (batch_size, num_features)
+        return tf.TensorShape((batch_size, num_features))
+    
+    
+    def init_params(self, x: tf.Tensor) -> None:
+        """
+        Method to initialize the parameters of the Flatten layer
+        
+        Parameters:
+        - x (tf.Tensor): Input data
+        """
+        
+        # Set the initialization flag
+        self.initialized = True

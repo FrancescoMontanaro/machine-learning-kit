@@ -1,5 +1,6 @@
 import re
 import numpy as np
+import tensorflow as tf
 from itertools import count
 from typing import Callable
 
@@ -55,15 +56,15 @@ class FeedForward:
             raise ValueError("Layer names must be unique!")
         
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
         """
         Call method to initialize and execute the forward pass of the neural network
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, ...)
+        - x (tf.Tensor): Input data. Shape: (Batch size, ...)
         
         Returns:
-        - np.ndarray: Output of the neural network
+        - tf.Tensor: Output of the neural network
         
         Raises:
         - ValueError: If the number of layers is 0
@@ -87,10 +88,10 @@ class FeedForward:
 
     def fit(
         self, 
-        X_train: np.ndarray, 
-        y_train: np.ndarray,
-        X_valid: np.ndarray,
-        y_valid: np.ndarray,
+        X_train: tf.Tensor, 
+        y_train: tf.Tensor,
+        X_valid: tf.Tensor,
+        y_valid: tf.Tensor,
         optimizer: Optimizer,
         loss_fn: LossFn,
         batch_size: int = 8, 
@@ -102,10 +103,10 @@ class FeedForward:
         Method to train the neural network
         
         Parameters:
-        - X_train (np.ndarray): Features of the training dataset. Shape: (samples, ...)
-        - y_train (np.ndarray): Labels of the training dataset. Shape: (samples, ...)
-        - X_valid (np.ndarray): Features of the validation dataset. Shape: (samples, ...)
-        - y_valid (np.ndarray): Labels of the validation dataset. Shape: (samples, ...)
+        - X_train (tf.Tensor): Features of the training dataset. Shape: (samples, ...)
+        - y_train (tf.Tensor): Labels of the training dataset. Shape: (samples, ...)
+        - X_valid (tf.Tensor): Features of the validation dataset. Shape: (samples, ...)
+        - y_valid (tf.Tensor): Labels of the validation dataset. Shape: (samples, ...)
         - optimizer (Optimizer): Optimizer to update the parameters of the model
         - loss_fn (LossFn): Loss function to compute the error of the model
         - batch_size (int): Number of samples to use for each batch. Default is 32
@@ -114,7 +115,7 @@ class FeedForward:
         - callbacks (list[Callback]): List of callbacks to execute
         
         Returns:
-        - dict[str, np.ndarray]: Dictionary containing the training and validation losses
+        - dict[str, tf.Tensor]: Dictionary containing the training and validation losses
         """
         
         # Initialize the control variables
@@ -126,10 +127,10 @@ class FeedForward:
         }
         self.stop_training = False
         self.epoch = 0
-        n_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
+        n_steps = int(tf.floor(tf.divide(X_train.shape[0], batch_size))) if tf.less(batch_size, X_train.shape[0]) else 1
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
-        self(X_train[:1])
+        self(get_batch(X_train, batch_size, 0))
         
         # Add the optimizer to the layers
         for layer in self.layers:
@@ -144,14 +145,14 @@ class FeedForward:
             self.train()
             
             # Shuffle the dataset at the beginning of each epoch
-            X_train_shuffled, Y_train_shuffled = shuffle_data(X_train, y_train)
+            X_train_shuffled, y_train_shuffled = shuffle_data(X_train, y_train)
             
             # Iterate over the batches
-            epoch_loss = 0.0
+            epoch_loss = tf.constant(0.0)
             for step in range(n_steps):
                 # Get the current batch of data
-                X_batch = X_train_shuffled[step * batch_size:(step + 1) * batch_size]
-                y_batch = Y_train_shuffled[step * batch_size:(step + 1) * batch_size]
+                X_batch = get_batch(X_train_shuffled, batch_size, step)
+                y_batch = get_batch(y_train_shuffled, batch_size, step)
                 
                 # Forward pass: Compute the output of the model
                 batch_output = self.forward(X_batch)
@@ -166,7 +167,7 @@ class FeedForward:
                 self.backward(loss_grad)
                 
                 # Update the epoch loss
-                epoch_loss += loss
+                epoch_loss = tf.add(tf.cast(epoch_loss, loss.dtype), loss)
                 
                 # Display epoch progress
                 print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((step + 1)/n_steps)*100), 2)}%) --> loss: {loss:.4f}", end="")
@@ -180,7 +181,7 @@ class FeedForward:
             validation_output = self.forward(X_valid)
             
             # Store the training and validation losses
-            self.history["loss"] = np.append(self.history["loss"], epoch_loss / (X_train.shape[0] // batch_size))
+            self.history["loss"] = np.append(self.history["loss"], tf.divide(epoch_loss, tf.cast(tf.floor(tf.divide(X_train.shape[0], batch_size)), X_train.dtype)))
             self.history["val_loss"] = np.append(self.history["val_loss"], loss_fn(y_valid, validation_output))
             
             # Compute the metrics
@@ -218,44 +219,41 @@ class FeedForward:
         return self.history
         
         
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: tf.Tensor) -> tf.Tensor:
         """
         Forward pass of the neural network
         
         Parameters:
-        - x (np.ndarray): Features of the dataset
+        - x (tf.Tensor): Features of the dataset
         
         Returns:
-        - np.ndarray: Output of the neural network
+        - tf.Tensor: Output of the neural network
         """
         
         # create a dictionary to store the output of each layer
         self.layers_outputs = {}
         
-        # Copy the input
-        out = np.copy(x)
-        
         # Iterate over the layers
         for layer in self.layers:
             # Compute the output of the layer and pass it to the next one
-            out = layer(out)
+            x = layer(x)
             
             # Store the output of the layer
-            self.layers_outputs[layer.name] = out
+            self.layers_outputs[layer.name] = x
             
         # Return the output of each layer of the neural network
-        return out
+        return x
     
     
-    def backward(self, loss_grad: np.ndarray) -> np.ndarray:
+    def backward(self, loss_grad: tf.Tensor) -> tf.Tensor:
         """
         Backward pass of the neural network
         
         Parameters:
-        - loss_grad (np.ndarray): Gradient of the loss with respect to the output of the neural network
+        - loss_grad (tf.Tensor): Gradient of the loss with respect to the output of the neural network
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the neural network
+        - tf.Tensor: Gradient of the loss with respect to the input of the neural network
         """
         
         # Create a dictionary to store the gradient of each layer
