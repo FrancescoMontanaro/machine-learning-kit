@@ -1,7 +1,7 @@
 import torch
 from typing import Literal
 
-from utils import device
+from .utils import device
 
 
 class DataLoader:

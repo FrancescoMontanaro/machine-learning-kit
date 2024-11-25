@@ -3,10 +3,10 @@ import torch.nn as nn
 from typing import Optional
 from torch.nn import functional as F
 
-from utils import device
-from data_loader import DataLoader
-from feed_forward import FeedForward
-from attention_mechanism import MultiHeadAttention
+from .utils import device
+from .data_loader import DataLoader
+from .feed_forward import FeedForward
+from .attention_mechanism import MultiHeadAttention
 
 
 class TransformerBlock(nn.Module):
@@ -223,13 +223,13 @@ class Transformer(nn.Module):
                 losses = self.estimate_loss(data_loader, eval_iters, batch_size)
                 
                 # Print the losses
-                print(f'Epoch {epoch+1} - Train Loss: {losses["train"]:.4f}, Val Loss: {losses["val"]:.4f}')
+                print(f'Epoch {epoch+1}/{epochs} - Train Loss: {losses["train"]:.4f}, Val Loss: {losses["val"]:.4f}')
                 
             # Get the batch
             x, y = data_loader.get_batch(split='train', batch_size=batch_size, block_size=self.block_size)
             
             # Get the logits and loss
-            logits, loss = self(x, y)
+            _, loss = self(x, y)
             
             # Zero the gradients
             optimizer.zero_grad(set_to_none=True)
