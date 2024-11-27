@@ -1,5 +1,6 @@
+regex
 numpy
-matplotlib
-scikit-learn
 torch
 tensorflow
+matplotlib
+scikit-learn

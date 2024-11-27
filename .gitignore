@@ -6,3 +6,4 @@ dataset/
 .dev/
 compare_models.py
 test*.py
+checkpoints/
