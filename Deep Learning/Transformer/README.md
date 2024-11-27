@@ -1,4 +1,3 @@
-
 # Transformer
 
 This repository contains a transformer model built from scratch in PyTorch, with an in-depth explanation of each layer. Using a simple example sentence, we detail each computational step, matrix transformation, and operation within the model.
@@ -8,6 +7,7 @@ This repository contains a transformer model built from scratch in PyTorch, with
 1. [Introduction](#introduction)
 2. [Running Example: "I like cats"](#running-example)
 3. [Components & Detailed Calculations](#components-and-detailed-calculations)
+    - [Tokenizer](#tokenizer)
     - [Token Embedding](#token-embedding)
     - [Positional Encoding](#positional-encoding)
     - [Self-Attention](#self-attention)
@@ -17,7 +17,7 @@ This repository contains a transformer model built from scratch in PyTorch, with
 
 ## Introduction
 
-This project explores each part of a transformer model, inspired by "Attention Is All You Need,". By using the sentence **"I like cats,"** we calculate and display each transformation matrix, illustrating how the transformer processes input tokens.
+This project explores each part of a transformer model, inspired by "Attention Is All You Need." By using the sentence **"I like cats,"** we calculate and display each transformation matrix, illustrating how the transformer processes input tokens.
 
 ## Running Example: "I like cats"
 
@@ -26,12 +26,40 @@ We’ll follow **"I like cats"** step-by-step, with detailed matrix manipulation
 ### Example Details
 
 1. **Input Sentence**: "I like cats"
-2. **Token IDs**: Assign each word an ID (e.g., `{ "I": 1, "like": 2, "cats": 3 }`).
+2. **Tokenization**:
+    - The tokenizer splits the text into subword units or tokens using a Byte Pair Encoding (BPE) mechanism.
+    - Each token is encoded as an integer based on a trained vocabulary.
+    - For example:
+        - Sentence: `"I like cats"`
+        - Tokens: `[1, 2, 3]` (IDs corresponding to `"I"`, `"like"`, and `"cats"`).
 3. **Embedding Dimension**: For simplicity, we set $d_{\text{model}} = 3$, with a vocabulary size $V = 10$.
 
 Each transformation matrix will be explicitly calculated and explained.
 
 ## Components and Detailed Calculations
+
+### Tokenizer
+
+The tokenizer is based on Byte Pair Encoding (BPE) and consists of the following main steps:
+
+1. **Training**: 
+    - The tokenizer is trained on a corpus of text to learn a vocabulary of tokens and merge rules.
+    - Starting from UTF-8 encoded bytes, frequent byte pairs are merged iteratively to form new tokens, expanding the vocabulary.
+2. **Encoding**:
+    - Input text is split into chunks using a regex pattern and converted into initial byte-level tokens.
+    - The learned merge rules are applied iteratively to compress tokens into higher-level subword units.
+    - Example:
+        - Input: `"I like cats"`
+        - Output: `[1, 2, 3]` (token IDs based on the trained vocabulary).
+3. **Decoding**:
+    - A sequence of token IDs is converted back to text using the reverse of the vocabulary and merge rules.
+
+For example:
+- Input: `"I like cats"`
+- Encoding: `[1, 2, 3]`
+- Decoding: `"I like cats"`
+
+The tokenizer code is implemented in `tokenizer.py` and supports training, saving/loading states, and efficient encoding/decoding.
 
 ### Token Embedding
 
@@ -39,9 +67,9 @@ Tokens are converted to embeddings using an embedding matrix $E$ with dimensions
 
 - **Embedding Matrix $E$** (simplified for explanation):
   $E = \begin{bmatrix}
-    0.1 & 0.2 & 0.3 \\ 
-    0.4 & 0.5 & 0.6 \\ 
-    0.7 & 0.8 & 0.9 \\ 
+    0.1 & 0.2 & 0.3 \\
+    0.4 & 0.5 & 0.6 \\
+    0.7 & 0.8 & 0.9 \\
     \vdots & \vdots & \vdots 
   \end{bmatrix}$
 
