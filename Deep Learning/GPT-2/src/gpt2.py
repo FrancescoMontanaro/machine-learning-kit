@@ -98,7 +98,7 @@ class GPT2(nn.Module):
         return logits, loss
     
     
-    def fit(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int = 4, sequence_length: int = 8) -> None:
+    def fit(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int = 4, sequence_length: int = 8, micro_batch_size: Optional[int] = None) -> None:
         """
         Method to train the model.
         
@@ -108,13 +108,31 @@ class GPT2(nn.Module):
         - lr (float): The learning rate.
         - batch_size (int): The batch size.
         - sequence_length (int): The sequence length.
+        - micro_batch_size (int, optional): The size of the micro-batch. Default is None.
+        
+        Raises:
+        - AssertionError: If the batch size is not divisible by the micro-batch size * sequence length.
         """
         
-        # Define an optimizer
-        optimizer = torch.optim.AdamW(self.parameters(), lr=lr)
+        # Check if the micro-batch size is provided
+        if micro_batch_size is None:
+            # Set the micro-batch size to the batch size if not provided
+            micro_batch_size = batch_size
+        else:
+            # Checking that the batch size is divisible by the micro-batch size
+            assert batch_size % (micro_batch_size * sequence_length) == 0, "The batch size must be divisible by the micro-batch size * sequence length. (mB * T)"
         
-        # Compute the number of iterations per epoch
-        n_steps = len(data_loader.train_tokens) // (batch_size * sequence_length)
+        # Define an optimizer
+        optimizer = torch.optim.AdamW(
+            params = self.parameters(), 
+            lr = lr, 
+            betas = (0.9, 0.95), # Default values from the GPT-3 paper,
+            eps = 1e-8 # Default value from the GPT-3 paper
+        )
+        
+        # Compute the number of steps per epoch and micro-steps per batch
+        n_steps = max(1, len(data_loader.train_tokens) // (batch_size * sequence_length))
+        n_micro_steps = max(1, batch_size // (micro_batch_size * sequence_length))
         
         # Iterate over the epochs
         for epoch in range(epochs):
@@ -122,48 +140,75 @@ class GPT2(nn.Module):
             epoch_loss = 0.0
             step_duration = 0.0
             
-            # Iterate over the iterations
+            # Start the timer of the epoch
+            epoch_start = time.time()
+            
+            # Iterate over the steps
             for step in range(n_steps):
                 # Start the timer
                 t0 = time.time()
                 
-                # Get the current batch
-                x, y = data_loader.get_batch('train', batch_size, sequence_length)
-                
                 # Reset the gradients
                 optimizer.zero_grad()
                 
-                # Perform the forward pass
-                _, loss = self(x, y)
+                # Initialize the loss accumulator
+                loss_accum = 0.0
                 
-                # Perform the backward pass
-                loss.backward()
+                # Iterate over the micro-steps
+                for micro_step in range(n_micro_steps):
+                    # Get the current batch
+                    x, y = data_loader.get_batch('train', micro_batch_size, sequence_length)
+            
+                    # Perform the forward pass
+                    _, loss = self(x, y)
+                    
+                    # Normalize the loss value by the micro-batch size
+                    # This is done because the gradient accumulation only sums up the gradients without normalizing them
+                    loss /= n_micro_steps
+                    
+                    # Accumulate the loss
+                    loss_accum += loss.detach()
+                
+                    # Compute the gradients
+                    loss.backward()
+                    
+                    # Display the step progress
+                    print(f"\rEpoch {epoch + 1}/{epochs} | Step {step + 1}/{n_steps} | Step completion percentage {(((micro_step + 1) / n_micro_steps)*100):.2f}%", end="")
+                
+                # Clip the gradients to avoid exploding gradients
+                # The gradient norm is clipped to 1.0
+                # This technique is taken from the GPT-3 paper
+                torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0)
                 
                 # Update the parameters
                 optimizer.step()
                 
-                # Stop the timer
-                t1 = time.time()
+                # Accumulate epoch loss
+                epoch_loss += loss_accum
                 
-                # Compute the elapsed time in milliseconds
-                dt = (t1 - t0) * 1000
-                
-                # Accumulate epoch loss and step duration
-                epoch_loss += loss.item()
-                step_duration += dt
+                # Accumulate the step duration
+                t1 = time.time() # Stop the timer
+                dt = (t1 - t0) * 1000 # Compute the elapsed time in milliseconds
+                step_duration += dt # Accumulate the step duration
                 
                 # Display the epoch progress
-                print(f"\rEpoch {epoch + 1}/{epochs} ({round((((step + 1)/n_steps)*100), 2)}%) | {dt:.2f} ms/step --> loss: {loss:.4f}", end="")
+                print(f"\rEpoch: {epoch + 1}/{epochs} | Completion percentage: {(((step + 1)/n_steps)*100):.2f}% | Step duration {dt:.2f} ms/step --> loss: {loss_accum:.4f}")
             
             # Compute the average epoch loss and step duration  
             avg_epoch_loss = epoch_loss / n_steps
             avg_step_duration = step_duration / n_steps
             
             # Evaluate the model on the validation set
-            val_loss = self.estimate_loss(data_loader, batch_size, sequence_length)
+            val_loss = self.estimate_loss(data_loader, micro_batch_size, sequence_length)
+            
+            # Stop the timer of the epoch
+            epoch_end = time.time()
+            
+            # Compute the epoch duration
+            epoch_duration = (epoch_end - epoch_start) * 1000
               
             # Display the epoch loss  
-            print(f"\rEpoch {epoch + 1}/{epochs} | {avg_step_duration:.2f} ms/step --> loss: {avg_epoch_loss:.4f} - val_loss: {val_loss:.4f}")
+            print(f"Epoch {epoch + 1}/{epochs} | Average step duration {avg_step_duration:.2f} ms/step | Epoch duration {epoch_duration:.2f} ms/epoch --> loss: {avg_epoch_loss:.4f} - val_loss: {val_loss:.4f}")
         
     
     @torch.no_grad()
@@ -227,7 +272,7 @@ class GPT2(nn.Module):
         self.eval()
         
         # Compute the number of evaluation steps
-        n_steps = len(data_loader.val_tokens) // (batch_size * sequence_length)
+        n_steps = max(1, len(data_loader.val_tokens) // (batch_size * sequence_length))
         
         # Initialize the loss values
         val_loss = 0.0

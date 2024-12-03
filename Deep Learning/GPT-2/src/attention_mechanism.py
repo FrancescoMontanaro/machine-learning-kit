@@ -35,12 +35,7 @@ class MultiHeadAttention(nn.Module):
         
         # Creating the output linear layer
         self.output_linear = nn.Linear(config.n_embed, config.n_embed)
-        
-        # Add a flag to the output linear layer to indicate that it is a residual layer
-        self.output_linear.residual_layer = 1 # type: ignore
-        
-        # Creating a triangular mask to prevent attending to future tokens
-        self.register_buffer("mask", torch.tril(torch.ones(config.context_size, config.context_size)).view(1, 1, config.context_size, config.context_size))
+        self.output_linear.residual_layer = 1 # Add a flag to the output linear layer to indicate that it is a residual layer # type: ignore
         
         
     ### Public methods ###
